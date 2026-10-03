@@ -15,6 +15,8 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'dev/**/*.test.ts'],
     setupFiles: ['./vitest.setup.ts'],
     pool: 'forks',
+    // Node 25+ defines a built-in localStorage global that shadows happy-dom's localStorage.
+    execArgv: ['--no-experimental-webstorage'],
   },
   resolve: {
     alias: [
