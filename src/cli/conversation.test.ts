@@ -94,6 +94,36 @@ describe('conversation commands', () => {
     expect(error).not.toHaveBeenCalled();
   });
 
+  it('prints approval and revocation events without sending comment receipts', async () => {
+    const events = [true, false].map((approved, index) => ({
+      type: 'review.approval',
+      origin: 'user',
+      reviewId: 'r',
+      approved,
+      cursor: `s:${index + 1}`,
+    }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ events, cursor: 's:2' })));
+    await createCommentCommand().parseAsync(['node', 'difit', 'watch', '--port', '4966', '--once']);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      log.mock.calls.slice(0, 2).map((call) => JSON.parse(String(call[0])) as unknown),
+    ).toEqual(events);
+  });
+
+  it.each([404, 409])('keeps replaying when a receipt returns %s', async (status) => {
+    const event = { origin: 'user', reviewId: 'r', threadId: 't', messageId: 'm', cursor: 's:1' };
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ events: [event], cursor: 's:1' })))
+      .mockResolvedValueOnce(new Response('{}', { status }));
+    await createCommentCommand().parseAsync(['node', 'difit', 'watch', '--port', '4966', '--once']);
+    expect(log.mock.calls.map((call) => JSON.parse(String(call[0])) as unknown)).toEqual([
+      event,
+      { type: 'conversation.cursor', cursor: 's:1' },
+    ]);
+    expect(error).not.toHaveBeenCalled();
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
   it('keeps cursor errors on stderr and exits unsuccessfully', async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ error: 'Conversation cursor expired' }), { status: 409 }),

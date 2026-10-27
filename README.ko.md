@@ -284,3 +284,10 @@ MIT
 Use `--conversation --keep-alive` to stream saved comments to a watching agent and
 receive replies in their original discussions. This is opt-in and does not start an
 agent automatically. See [the conversation protocol](docs/agent-conversations.md).
+
+## Reversible review approval
+
+Use `--lgtm` (alias `--ship-it`) to show the opt-in LGTM approval toggle. Approval
+starts off, stays scoped to the displayed selection, and can be revoked while the
+review remains open. Conversation watchers receive approval changes immediately.
+See [the approval workflow](docs/agent-conversations.md).

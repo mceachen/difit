@@ -6,6 +6,7 @@ import type {
   ConversationBatch,
   ConversationEvent,
   ConversationSnapshot,
+  ReviewApproval,
 } from '../types/conversation.js';
 import type { CommentProgress, DiffCommentThread, DiffSelection } from '../types/diff.js';
 import { getDiffSelectionKey } from '../utils/diffSelection.js';
@@ -15,6 +16,7 @@ interface Review {
   selection: DiffSelection;
   threads: DiffCommentThread[];
   progress: Map<string, CommentProgress>;
+  approval: ReviewApproval;
 }
 
 /** A bounded, process-local journal. Cursors cannot be reused after server restart. */
@@ -36,10 +38,35 @@ export class Conversation {
         selection: { ...selection },
         threads: [],
         progress: new Map<string, CommentProgress>(),
+        approval: { approved: false },
       };
       this.reviews.set(key, review);
     }
     return review;
+  }
+
+  getApproval(selection: DiffSelection): ReviewApproval {
+    return { ...this.getReview(selection).approval };
+  }
+
+  setApproval(selection: DiffSelection, approved: boolean): ReviewApproval {
+    const review = this.getReview(selection);
+    if (review.approval.approved === approved) return { ...review.approval };
+    this.sequence += 1;
+    const timestamp = new Date().toISOString();
+    review.approval = { approved, cursor: this.cursor, updatedAt: timestamp };
+    this.events.push({
+      type: 'review.approval',
+      origin: 'user',
+      cursor: this.cursor,
+      reviewId: review.id,
+      selection: { ...selection },
+      approved,
+      timestamp,
+    });
+    if (this.events.length > this.capacity) this.events.shift();
+    for (const listener of this.listeners) listener();
+    return { ...review.approval };
   }
 
   update(
@@ -113,6 +140,7 @@ export class Conversation {
         id: review.id,
         selection: { ...review.selection },
         threads: structuredClone(this.withProgress(review.selection, review.threads)),
+        approval: { ...review.approval },
       })),
     };
   }

@@ -9,7 +9,7 @@ process.env.VITEST_SERVER_TEST = 'true';
 
 import { startServer } from './server.js';
 import type { CommentImport, DiffCommentThread } from '../types/diff.js';
-import type { ConversationBatch } from '../types/conversation.js';
+import type { ConversationBatch, ConversationSnapshot } from '../types/conversation.js';
 
 // Add fetch polyfill for Node.js test environment
 const { fetch } = await import('undici');
@@ -1842,7 +1842,7 @@ describe('Server Integration Tests', () => {
       const batch = (await (
         await fetch(`${origin}/api/conversation/events?wait=0`)
       ).json()) as ConversationBatch;
-      const event = batch.events[0]!;
+      const event = batch.events.find((entry) => entry.type !== 'review.approval')!;
       expect(event).toMatchObject({
         scope: 'review',
         intent: 'question',
@@ -1897,7 +1897,7 @@ describe('Server Integration Tests', () => {
       const batch = (await (
         await fetch(`${origin}/api/conversation/events?wait=0`)
       ).json()) as ConversationBatch;
-      const event = batch.events[0]!;
+      const event = batch.events.find((entry) => entry.type !== 'review.approval')!;
       expect((await post('/api/conversation/status', { ...event, status: 'noted' })).status).toBe(
         200,
       );
@@ -1931,7 +1931,7 @@ describe('Server Integration Tests', () => {
       const batch = (await (
         await fetch(`${origin}/api/conversation/events?wait=0`)
       ).json()) as ConversationBatch;
-      const event = batch.events[0]!;
+      const event = batch.events.find((entry) => entry.type !== 'review.approval')!;
       const identity = {
         reviewId: event.reviewId,
         threadId: event.threadId,
@@ -2018,7 +2018,7 @@ describe('Server Integration Tests', () => {
       const initial = await fetch(`${origin}/api/conversation/events?wait=0`);
       const batch = (await initial.json()) as ConversationBatch;
       expect(batch.events).toHaveLength(1);
-      const event = batch.events[0]!;
+      const event = batch.events.find((entry) => entry.type !== 'review.approval')!;
       expect(event).toMatchObject({
         type: 'comment.created',
         origin: 'user',
@@ -2091,7 +2091,7 @@ describe('Server Integration Tests', () => {
       const batch = (await (
         await fetch(`http://localhost:${first.port}/api/conversation/events?wait=0`)
       ).json()) as ConversationBatch;
-      const event = batch.events[0]!;
+      const event = batch.events.find((entry) => entry.type !== 'review.approval')!;
       await post(first.port, '/api/conversation/reply', {
         reviewId: event.reviewId,
         threadId: event.threadId,
@@ -2106,7 +2106,11 @@ describe('Server Integration Tests', () => {
       const restored = (await (
         await fetch(`http://localhost:${second.port}/api/conversation/events?wait=0`)
       ).json()) as ConversationBatch;
-      expect(restored.events.map(({ body, origin }) => ({ body, origin }))).toEqual([
+      expect(
+        restored.events
+          .filter((entry) => entry.type !== 'review.approval')
+          .map(({ body, origin }) => ({ body, origin })),
+      ).toEqual([
         { body: 'Why?', origin: 'user' },
         { body: 'Because.', origin: 'agent' },
       ]);
@@ -2153,7 +2157,11 @@ describe('Server Integration Tests', () => {
       const restored = (await (
         await fetch(`http://localhost:${second.port}/api/conversation/events?wait=0`)
       ).json()) as ConversationBatch;
-      expect(restored.events.map(({ body, origin }) => ({ body, origin }))).toEqual([
+      expect(
+        restored.events
+          .filter((entry) => entry.type !== 'review.approval')
+          .map(({ body, origin }) => ({ body, origin })),
+      ).toEqual([
         { body: 'Finding.', origin: 'agent' },
         { body: 'Imported reply.', origin: 'agent' },
       ]);
@@ -2247,6 +2255,247 @@ describe('Server Integration Tests', () => {
           })
         ).status,
       ).toBe(400);
+    });
+  });
+
+  describe('Ship it option', () => {
+    it('keeps approval reversible, selection-scoped, and visible to conversation consumers', async () => {
+      const { port, server } = await startServer({
+        selection: { targetCommitish: 'HEAD', baseCommitish: 'HEAD^' },
+        shipIt: true,
+        conversation: true,
+      });
+      servers.push(server);
+      const origin = `http://localhost:${port}`;
+      const url = `${origin}/api/approval?base=base-a&target=target-a`;
+      expect(await (await fetch(url)).json()).toMatchObject({ approved: false });
+      for (const approved of [true, false]) {
+        const result = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ approved }),
+        });
+        expect(result.ok).toBe(true);
+        expect(await result.json()).toMatchObject({ approved });
+        expect(await (await fetch(url)).json()).toMatchObject({ approved });
+        expect(process.exit).not.toHaveBeenCalled();
+      }
+      const other = await fetch(`${origin}/api/approval?base=base-b&target=target-b`);
+      expect(await other.json()).toMatchObject({ approved: false });
+      const batch = (await (
+        await fetch(`${origin}/api/conversation/events?wait=0`)
+      ).json()) as ConversationBatch;
+      expect(batch.events).toEqual([
+        expect.objectContaining({
+          type: 'review.approval',
+          approved: true,
+          selection: { baseCommitish: 'base-a', targetCommitish: 'target-a' },
+        }),
+        expect.objectContaining({ type: 'review.approval', approved: false }),
+      ]);
+      const snapshot = (await (
+        await fetch(`${origin}/api/conversation/snapshot`)
+      ).json()) as ConversationSnapshot;
+      expect(
+        snapshot.reviews.find((review) => review.selection.targetCommitish === 'target-a')?.approval
+          .approved,
+      ).toBe(false);
+    });
+
+    it('supports the toggle without conversation mode and rejects malformed approval', async () => {
+      const { port, server } = await startServer({
+        selection: { targetCommitish: 'HEAD', baseCommitish: 'HEAD^' },
+        shipIt: true,
+      });
+      servers.push(server);
+      const url = `http://localhost:${port}/api/approval`;
+      for (const body of ['{}', '{"approved":"true"}', 'null']) {
+        expect(
+          (
+            await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body,
+            })
+          ).status,
+        ).toBe(400);
+      }
+      expect(
+        (
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: '{"approved":true}',
+          })
+        ).status,
+      ).toBe(415);
+      for (const approved of [true, false]) {
+        await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ approved }),
+        });
+        expect(await (await fetch(url)).json()).toMatchObject({ approved });
+      }
+      expect(process.exit).not.toHaveBeenCalled();
+    });
+
+    it('includes shipIt flag in diff response when enabled', async () => {
+      const { port, server } = await startServer({
+        selection: { targetCommitish: 'HEAD', baseCommitish: 'HEAD^' },
+        shipIt: true,
+      });
+      servers.push(server);
+
+      const response = await fetch(`http://localhost:${port}/api/diff`);
+      const data = (await response.json()) as any;
+
+      expect(data.shipIt).toBe(true);
+    });
+
+    it('prints comments, then the approval line, then exits on POST /api/ship-it', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const { port, server } = await startServer({
+          selection: { targetCommitish: 'HEAD', baseCommitish: 'HEAD^' },
+          shipIt: true,
+        });
+        servers.push(server);
+        await fetch(`http://localhost:${port}/api/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            comments: [
+              {
+                id: '1',
+                file: 'src/App.tsx',
+                line: 10,
+                body: 'Nit: rename this',
+                timestamp: '2024-01-01T00:00:00Z',
+              },
+            ],
+          }),
+        });
+
+        const response = await fetch(`http://localhost:${port}/api/ship-it`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+
+        expect(response.ok).toBe(true);
+        await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0));
+        const output = log.mock.calls.map((args) => String(args[0]));
+        expect(output.at(-1)).toBe('✅ Commit approved: abc1234');
+        expect(output.at(-2)).toContain('src/App.tsx:L10');
+      } finally {
+        log.mockRestore();
+      }
+    });
+
+    it('approves the requested selection after another tab changes revisions', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      try {
+        const { port, server } = await startServer({
+          selection: { targetCommitish: 'HEAD', baseCommitish: 'HEAD^' },
+          shipIt: true,
+        });
+        servers.push(server);
+        await fetch(`http://localhost:${port}/api/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            comments: [{ id: 'a', file: 'a.ts', line: 1, body: 'Tab A comment' }],
+          }),
+        });
+        const parser = parserInstances.at(-1);
+        const diff = await parser.parseDiff();
+        parser.parseDiff.mockResolvedValue({
+          ...diff,
+          baseCommitish: 'ccccccc',
+          targetCommitish: 'bbbbbbb',
+        });
+        await fetch(`http://localhost:${port}/api/diff?base=ccccccc&target=bbbbbbb`);
+
+        await fetch(`http://localhost:${port}/api/ship-it?base=def4567&target=abc1234`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+
+        await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(0));
+        const output = log.mock.calls.map((args) => String(args[0]));
+        expect(output.at(-1)).toBe('✅ Commit approved: abc1234');
+        expect(output.join('\n')).toContain('Tab A comment');
+      } finally {
+        log.mockRestore();
+      }
+    });
+
+    it.each([{ contentType: 'text/plain' }, { contentType: 'application/x-www-form-urlencoded' }])(
+      'rejects browser-simple $contentType approval requests',
+      async ({ contentType }) => {
+        const { port, server } = await startServer({
+          selection: { targetCommitish: 'HEAD', baseCommitish: 'HEAD^' },
+          shipIt: true,
+        });
+        servers.push(server);
+
+        const response = await fetch(`http://localhost:${port}/api/ship-it`, {
+          method: 'POST',
+          headers: { 'Content-Type': contentType, Origin: 'https://example.invalid' },
+          body: '{}',
+        });
+
+        expect(response.status).toBe(415);
+        expect(process.exit).not.toHaveBeenCalled();
+      },
+    );
+
+    it('waits for stdout to flush before exiting', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      let flush: (() => void) | undefined;
+      const write = vi.spyOn(process.stdout, 'write').mockImplementation((...args: unknown[]) => {
+        const callback = args.at(-1);
+        if (typeof callback === 'function') {
+          flush = () => Reflect.apply(callback, undefined, []);
+        }
+        return true;
+      });
+      try {
+        const { port, server } = await startServer({
+          selection: { targetCommitish: 'HEAD', baseCommitish: 'HEAD^' },
+          shipIt: true,
+        });
+        servers.push(server);
+        await fetch(`http://localhost:${port}/api/ship-it`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+
+        await vi.waitFor(() => expect(flush).toBeTypeOf('function'));
+        expect(process.exit).not.toHaveBeenCalled();
+        flush?.();
+        flush = undefined;
+        expect(process.exit).toHaveBeenCalledWith(0);
+      } finally {
+        flush?.();
+        write.mockRestore();
+        log.mockRestore();
+      }
+    });
+
+    it('does not register POST /api/ship-it without the shipIt option', async () => {
+      const { port, server } = await startServer({
+        selection: { targetCommitish: 'HEAD', baseCommitish: 'HEAD^' },
+      });
+      servers.push(server);
+
+      const response = await fetch(`http://localhost:${port}/api/ship-it`, { method: 'POST' });
+
+      expect(response.status).toBe(404);
+      expect(process.exit).not.toHaveBeenCalled();
     });
   });
 });

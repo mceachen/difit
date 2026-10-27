@@ -66,6 +66,7 @@ export interface DiffResponse {
   requestedTargetCommitish?: string;
   requestedBaseMode?: BaseMode;
   clearComments?: boolean;
+  shipIt?: boolean;
   repositoryId?: string;
   reviewContext?: ReviewContext;
   commentImports?: CommentImport[];

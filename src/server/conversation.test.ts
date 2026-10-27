@@ -24,6 +24,23 @@ const thread: DiffCommentThread = {
 };
 
 describe('Conversation journal', () => {
+  it('journals approval changes, wakes watchers, and treats repeated state as idempotent', async () => {
+    const journal = new Conversation();
+    const waiting = journal.wait(journal.cursor, 25000, new AbortController().signal);
+    const approval = journal.setApproval(selection, true);
+    expect((await waiting).events).toEqual([
+      expect.objectContaining({ type: 'review.approval', approved: true }),
+    ]);
+    journal.setApproval(selection, true);
+    expect(journal.read(approval.cursor).events).toEqual([]);
+    journal.setApproval(selection, false);
+    expect(journal.snapshot().reviews[0]?.approval.approved).toBe(false);
+    expect(journal.read(approval.cursor).events).toEqual([
+      expect.objectContaining({ type: 'review.approval', approved: false }),
+    ]);
+    expect(new Conversation().getApproval(selection).approved).toBe(false);
+  });
+
   it('captures review context, emits edits, and does not repeat unchanged messages', () => {
     const journal = new Conversation();
     journal.update(selection, [], [thread], 'user');
@@ -60,6 +77,7 @@ describe('Conversation journal', () => {
     const journal = new Conversation();
     journal.update(selection, [], [thread], 'user');
     const event = journal.read().events[0]!;
+    if (event.type === 'review.approval') throw new Error('Expected comment event');
     const set = (status: 'delivered' | 'thinking' | 'read' | 'replied') =>
       journal.setProgress(event.reviewId, event.threadId, event.messageId, event.cursor, status);
     const progress = () => journal.snapshot().reviews[0]!.threads[0]!.messages[0]!.progress;

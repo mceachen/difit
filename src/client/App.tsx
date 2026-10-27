@@ -43,6 +43,7 @@ import { useExpandedLines, type MergedChunk } from './hooks/useExpandedLines';
 import { useFileWatch } from './hooks/useFileWatch';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useLazyDiffRendering } from './hooks/useLazyDiffRendering';
+import { useReviewApproval } from './hooks/useReviewApproval';
 import { useViewedFiles } from './hooks/useViewedFiles';
 import { useViewport } from './hooks/useViewport';
 import { fetchClientSettings, saveClientSettings } from './services/userSettings';
@@ -137,6 +138,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCopiedAll, setIsCopiedAll] = useState(false);
+  const [isShipping, setIsShipping] = useState(false);
+  const [shipItError, setShipItError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(getInitialSidebarWidth);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFileTreeOpen, setIsFileTreeOpen] = useState(getInitialFileTreeOpen);
@@ -192,8 +195,8 @@ function App() {
     replaceThreads,
     addThread,
     addReviewThread,
-    toggleThreadResolved,
     replyToThread,
+    toggleThreadResolved,
     removeThread,
     removeMessage,
     updateMessage,
@@ -243,6 +246,10 @@ function App() {
     [commentSessionQueryString],
   );
   const [bootstrappedCommentsKey, setBootstrappedCommentsKey] = useState<string | null>(null);
+  const approval = useReviewApproval(
+    diffData?.shipIt && commentSessionQueryString ? getCommentApiUrl('/api/approval') : null,
+  );
+  const refreshApproval = approval.refresh;
   const hasBootstrappedComments =
     commentsContextKey !== null && commentsContextKey === bootstrappedCommentsKey;
   const bootstrappingCommentsKeyRef = useRef<string | null>(null);
@@ -284,7 +291,7 @@ function App() {
         }),
       });
       if (!response.ok) {
-        return;
+        throw new Error(`Failed to save comments: ${response.status} ${response.statusText}`);
       }
 
       const result = (await response.json()) as {
@@ -303,6 +310,25 @@ function App() {
     },
     [getCommentApiUrl, replaceThreads],
   );
+
+  const handleShipIt = async () => {
+    if (!approval.ready || isShipping || (!approval.approved && !hasBootstrappedComments)) {
+      return;
+    }
+
+    setIsShipping(true);
+    setShipItError(null);
+    try {
+      // A failed comment save must not prevent the user from revoking approval.
+      if (!approval.approved) await syncThreadsToServer(threads);
+      await approval.setApproved(!approval.approved);
+    } catch (approvalError) {
+      console.error('Failed to approve review:', approvalError);
+      setShipItError('Could not update approval. Please try again.');
+    } finally {
+      setIsShipping(false);
+    }
+  };
 
   // Viewed files management
   const {
@@ -554,7 +580,8 @@ function App() {
   const fetchDiffDataRef = useRef<((selection?: DiffSelection) => Promise<void>) | null>(null);
   const handleWatchReload = useCallback(async () => {
     await fetchDiffDataRef.current?.();
-  }, []);
+    await refreshApproval();
+  }, [refreshApproval]);
   const handleCommentsChanged = useCallback(async () => {
     try {
       const serverThreads = await fetchServerThreads();
@@ -572,6 +599,7 @@ function App() {
   const { shouldReload, reload, watchState } = useFileWatch(
     handleWatchReload,
     handleCommentsChanged,
+    refreshApproval,
   );
 
   // Track which file the mouse is over so `v` works without a cursor
@@ -1382,6 +1410,31 @@ function App() {
                     )}
                   </code>
                 </span>
+              )}
+              {diffData.shipIt && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleShipIt()}
+                    disabled={
+                      isShipping ||
+                      !approval.ready ||
+                      (!approval.approved && !hasBootstrappedComments)
+                    }
+                    aria-label="LGTM"
+                    aria-pressed={approval.approved}
+                    aria-busy={isShipping}
+                    title={approval.approved ? 'Revoke commit approval' : 'Approve this review'}
+                    className="flex h-9 shrink-0 items-center justify-center rounded border border-github-border px-3 py-1 text-xs font-medium text-github-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-github-accent disabled:opacity-50"
+                  >
+                    LGTM
+                  </button>
+                  {(shipItError || approval.error) && (
+                    <span role="alert" className="text-xs text-github-danger">
+                      {shipItError || approval.error}
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </div>

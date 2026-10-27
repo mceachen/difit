@@ -14,6 +14,7 @@ interface FileWatchHook {
 export function useFileWatch(
   onReload?: () => Promise<void>,
   onCommentsChanged?: () => Promise<void>,
+  onApprovalChanged?: () => Promise<void>,
 ): FileWatchHook {
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -50,6 +51,8 @@ export function useFileWatch(
         }));
         reconnectAttemptsRef.current = 0;
         setError(null);
+        // Recover approval changes missed while this browser was disconnected.
+        void onApprovalChanged?.();
       };
 
       eventSource.onmessage = (event) => {
@@ -86,6 +89,9 @@ export function useFileWatch(
               if (onCommentsChanged) {
                 void onCommentsChanged();
               }
+              break;
+            case 'approvalChanged':
+              void onApprovalChanged?.();
               break;
           }
         } catch (parseError) {
@@ -131,7 +137,7 @@ export function useFileWatch(
       console.error('Failed to connect to file watch service:', connectionError);
       setError('Failed to connect to file watch service');
     }
-  }, [maxReconnectAttempts, onCommentsChanged, reconnectDelay]);
+  }, [maxReconnectAttempts, onCommentsChanged, onApprovalChanged, reconnectDelay]);
 
   const handleReload = useCallback(async () => {
     if (watchState.isReloading) {

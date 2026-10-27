@@ -23,7 +23,17 @@ Object.defineProperty(window, 'getComputedStyle', {
 
 // Global test utilities
 export const mockFetch = (response: any, revisionsResponse?: any) => {
-  (global.fetch as any).mockImplementation((url: string) => {
+  const approvals = new Map<string, boolean>();
+  (global.fetch as any).mockImplementation((url: string, init?: RequestInit) => {
+    if (url.startsWith('/api/approval')) {
+      if (init?.method === 'POST') {
+        approvals.set(url, Boolean(JSON.parse(String(init.body)).approved));
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ approved: approvals.get(url) ?? false }),
+      });
+    }
     // Handle /api/revisions endpoint
     if (url.includes('/api/revisions')) {
       return Promise.resolve({

@@ -69,7 +69,7 @@ export function addConversationCommands(comment: Command): void {
           await checkResponse(response);
           const batch = (await response.json()) as ConversationBatch;
           for (const event of batch.events) {
-            if (event.origin === 'user') {
+            if (event.origin === 'user' && event.type !== 'review.approval') {
               const receipt = await fetch(
                 `http://localhost:${options.port}/api/conversation/status`,
                 {

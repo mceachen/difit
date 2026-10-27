@@ -9,6 +9,8 @@ import { fileURLToPath } from 'url';
 import express, { type Express } from 'express';
 import open from 'open';
 
+import type { ReviewApproval } from '../types/conversation.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 import { type DiffMode } from '../types/watch.js';
@@ -58,6 +60,7 @@ interface ServerOptions {
   openBrowser?: boolean;
   ignoreWhitespace?: boolean;
   clearComments?: boolean;
+  shipIt?: boolean;
   conversation?: boolean;
   commentImports?: CommentImport[];
   keepAlive?: boolean;
@@ -149,6 +152,7 @@ export async function startServer(
   };
   const fileWatcher = new FileWatcherService();
   const conversation = options.conversation ? new Conversation() : undefined;
+  const approvals = new Map<string, ReviewApproval>();
   const generatedStatusCache = new Map<
     string,
     { value: GeneratedStatusResponse; expiresAt: number }
@@ -378,6 +382,7 @@ export async function startServer(
       requestedTargetCommitish,
       requestedBaseMode,
       clearComments: options.clearComments,
+      shipIt: options.shipIt,
       repositoryId,
       reviewContext,
       commentImports: shouldIncludeCommentImports ? initialCommentImports : undefined,
@@ -1036,11 +1041,70 @@ export async function startServer(
   });
 
   // Function to output comments when server shuts down
-  function outputFinalComments() {
-    const session = getOrCreateCommentSession(currentCommentSelection);
+  function outputFinalComments(selection = currentCommentSelection) {
+    const session = getOrCreateCommentSession(selection);
     if (session.threads.length > 0) {
       console.log(formatCommentsOutput(session.threads.map(toCommentThread)));
     }
+  }
+
+  if (options.shipIt) {
+    // Separate endpoint: an older server must reject toggle requests, not treat
+    // them as the legacy approve-and-exit action below.
+    app.get('/api/approval', (req, res) => {
+      const selection = getCommentSelectionFromQuery(req.query as Record<string, unknown>);
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(
+        conversation?.getApproval(selection) ??
+          approvals.get(getDiffSelectionKey(selection)) ?? { approved: false },
+      );
+    });
+
+    app.post('/api/approval', (req, res) => {
+      if (!req.is('application/json')) {
+        res.status(415).json({ error: 'Approval requires application/json' });
+        return;
+      }
+      const input = req.body as { approved?: unknown } | null;
+      if (!input || typeof input.approved !== 'boolean') {
+        res.status(400).json({ error: 'Expected approved: true or false' });
+        return;
+      }
+      const selection = getCommentSelectionFromQuery(req.query as Record<string, unknown>);
+      const key = getDiffSelectionKey(selection);
+      const previous = conversation?.getApproval(selection) ?? approvals.get(key);
+      const approval = conversation
+        ? conversation.setApproval(selection, input.approved)
+        : previous?.approved === input.approved
+          ? previous
+          : { approved: input.approved, updatedAt: new Date().toISOString() };
+      approvals.set(key, approval);
+      if (previous?.approved !== approval.approved) {
+        console.log(
+          `LGTM ${approval.approved ? 'approved' : 'revoked'}: ${selection.targetCommitish}`,
+        );
+        fileWatcher.broadcast({ type: 'approvalChanged', timestamp: new Date().toISOString() });
+      }
+      res.json(approval);
+    });
+
+    // Compatibility for older clients. The toggle UI never calls this route.
+    app.post('/api/ship-it', (req, res) => {
+      // JSON requires a CORS preflight, so unrelated pages cannot approve with a simple POST.
+      if (!req.is('application/json')) {
+        res.status(415).json({ error: 'Approval requires application/json' });
+        return;
+      }
+      const selection = getCommentSelectionFromQuery(req.query as Record<string, unknown>);
+      res.on('finish', async () => {
+        await fileWatcher.stop();
+        outputFinalComments(selection);
+        console.log(`✅ Commit approved: ${selection.targetCommitish}`);
+        // The parent reads piped stdout; immediate exit can truncate comments and approval.
+        process.stdout.write('', (error) => process.exit(error ? 1 : 0));
+      });
+      res.json({ success: true });
+    });
   }
 
   // SSE endpoint for file watching

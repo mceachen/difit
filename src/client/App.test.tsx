@@ -570,6 +570,162 @@ describe('App Component - Heartbeat Connection', () => {
   });
 });
 
+describe('App Component - Ship it', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockComments = [];
+  });
+
+  it('hides the Ship it button unless the server enables it', async () => {
+    mockFetch(mockDiffResponse);
+
+    renderApp();
+
+    await screen.findByText('0 / 1 files viewed');
+    expect(screen.queryByRole('button', { name: 'LGTM' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the LGTM button clickable and toggles approval on and off', async () => {
+    mockFetch({ ...mockDiffResponse, shipIt: true });
+
+    renderApp();
+    const button = await screen.findByRole('button', { name: 'LGTM' });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/approval?base=HEAD%5E&target=HEAD', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved: true }),
+      });
+    });
+    await waitFor(() => expect(button).toHaveAttribute('aria-pressed', 'true'));
+    expect(button).toBeEnabled();
+    expect(screen.queryByText('Shipped')).not.toBeInTheDocument();
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toHaveAttribute('aria-pressed', 'false'));
+    expect(button).toBeEnabled();
+    expect(global.fetch).toHaveBeenCalledWith('/api/approval?base=HEAD%5E&target=HEAD', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved: false }),
+    });
+  });
+});
+
+describe('App Component - Ship it delivery', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockComments = [];
+  });
+
+  it('waits for comment bootstrap before enabling approval', async () => {
+    mockFetch({ ...mockDiffResponse, shipIt: true });
+    const fallback = vi.mocked(global.fetch).getMockImplementation()!;
+    vi.mocked(global.fetch).mockImplementation((input, init) => {
+      if (String(input).startsWith('/api/comments-json')) {
+        return new Promise<Response>(() => {});
+      }
+      return fallback(input, init);
+    });
+
+    renderApp();
+
+    expect(await screen.findByRole('button', { name: 'LGTM' })).toBeDisabled();
+  });
+
+  it('waits for a final comment save and approves the displayed selection', async () => {
+    mockFetch({
+      ...mockDiffResponse,
+      baseCommitish: 'def4567',
+      targetCommitish: 'abc1234',
+      shipIt: true,
+    });
+    const fallback = vi.mocked(global.fetch).getMockImplementation()!;
+    let finishSave: ((response: Response) => void) | undefined;
+    vi.mocked(global.fetch).mockImplementation((input, init) => {
+      if (String(input).startsWith('/api/comments?')) {
+        return new Promise<Response>((resolve) => {
+          finishSave = resolve;
+        });
+      }
+      return fallback(input, init);
+    });
+
+    renderApp();
+    const button = await screen.findByRole('button', { name: 'LGTM' });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+
+    await waitFor(() => expect(finishSave).toBeTypeOf('function'));
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/api/approval'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(button).toBeDisabled();
+
+    await act(async () => {
+      finishSave?.({ ok: true, json: async () => ({}) } as Response);
+    });
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/approval?base=def4567&target=abc1234', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved: true }),
+      });
+    });
+  });
+
+  it('keeps approval pending when the final comment save fails', async () => {
+    mockFetch({ ...mockDiffResponse, shipIt: true });
+    const fallback = vi.mocked(global.fetch).getMockImplementation()!;
+    vi.mocked(global.fetch).mockImplementation((input, init) => {
+      if (String(input).startsWith('/api/comments?')) {
+        return Promise.resolve({ ok: false, status: 500 } as Response);
+      }
+      return fallback(input, init);
+    });
+
+    renderApp();
+    const button = await screen.findByRole('button', { name: 'LGTM' });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not update approval');
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/api/approval'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(screen.getByRole('button', { name: 'LGTM' })).toBeEnabled();
+  });
+
+  it.each([{ failure: 'http' }, { failure: 'network' }])(
+    'allows retry after a $failure approval failure',
+    async ({ failure }) => {
+      mockFetch({ ...mockDiffResponse, shipIt: true });
+      const fallback = vi.mocked(global.fetch).getMockImplementation()!;
+      vi.mocked(global.fetch).mockImplementation((input, init) => {
+        if (String(input).startsWith('/api/approval') && init?.method === 'POST') {
+          return failure === 'network'
+            ? Promise.reject(new Error('Connection refused'))
+            : Promise.resolve({ ok: false, status: 500 } as Response);
+        }
+        return fallback(input, init);
+      });
+
+      renderApp();
+      const button = await screen.findByRole('button', { name: 'LGTM' });
+      await waitFor(() => expect(button).toBeEnabled());
+      fireEvent.click(button);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Could not update approval');
+      expect(screen.getByRole('button', { name: 'LGTM' })).toBeEnabled();
+    },
+  );
+});
+
 describe('App Component - Initial file collapsing', () => {
   beforeEach(() => {
     vi.clearAllMocks();

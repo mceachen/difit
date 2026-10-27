@@ -54,6 +54,18 @@ vi.stubGlobal('console', {
 });
 
 describe('useFileWatch', () => {
+  it('refreshes approval after reconnecting and when another tab changes it', async () => {
+    const onApprovalChanged = vi.fn(async () => {});
+    renderHook(() => useFileWatch(undefined, undefined, onApprovalChanged));
+    await waitFor(() => expect(onApprovalChanged).toHaveBeenCalledTimes(1));
+    act(() => {
+      MockEventSource.instances
+        .at(-1)
+        ?.dispatchMessage(JSON.stringify({ type: 'approvalChanged' }));
+    });
+    expect(onApprovalChanged).toHaveBeenCalledTimes(2);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.clearAllTimers();

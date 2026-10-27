@@ -85,6 +85,7 @@ interface CliOptions {
   comment: string[];
   pr?: string;
   clean?: boolean;
+  shipIt?: boolean;
   conversation?: boolean;
   includeUntracked?: boolean;
   keepAlive?: boolean;
@@ -121,6 +122,11 @@ program
   )
   .option('--pr <url>', 'GitHub PR URL to review (e.g., https://github.com/owner/repo/pull/123)')
   .option('--clean', 'start with a clean slate by clearing all existing comments')
+  .option(
+    '--lgtm, --ship-it',
+    'show an LGTM toggle to approve or revoke approval while the review stays open',
+  )
+  .option('--no-lgtm, --no-ship-it', 'hide the LGTM approval toggle')
   .option('--conversation', 'enable live comment events and exact-thread agent replies')
   .option('--no-conversation', 'disable live comment events and agent replies')
   .option('--include-untracked', 'automatically include untracked files in diff')
@@ -236,6 +242,7 @@ program
           host: options.host,
           openBrowser: options.open,
           clearComments: options.clean,
+          shipIt: options.shipIt,
           conversation: options.conversation,
           keepAlive: options.keepAlive,
           ...(commentImports.length > 0 ? { commentImports } : {}),
@@ -297,6 +304,7 @@ program
         host: options.host,
         openBrowser: options.open,
         clearComments: options.clean,
+        shipIt: options.shipIt,
         conversation: options.conversation,
         keepAlive: options.keepAlive,
         contextLines: options.context,

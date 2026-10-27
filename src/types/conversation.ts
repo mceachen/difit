@@ -26,8 +26,24 @@ export interface ConversationEvent {
 }
 
 export interface ConversationBatch {
-  events: ConversationEvent[];
+  events: (ConversationEvent | ReviewApprovalEvent)[];
   cursor: string;
+}
+
+export interface ReviewApproval {
+  approved: boolean;
+  updatedAt?: string;
+  cursor?: string;
+}
+
+interface ReviewApprovalEvent {
+  type: 'review.approval';
+  origin: 'user';
+  cursor: string;
+  reviewId: string;
+  selection: DiffSelection;
+  approved: boolean;
+  timestamp: string;
 }
 
 export interface ConversationSnapshot {
@@ -36,5 +52,6 @@ export interface ConversationSnapshot {
     id: string;
     selection: DiffSelection;
     threads: DiffCommentThread[];
+    approval: ReviewApproval;
   }[];
 }
