@@ -23,8 +23,8 @@ scoped package. Verify `--version` when starting a session and use the same
 version for the server and all comment commands. Do not substitute unscoped
 `difit` from npm.
 
-Conversation and the LGTM toggle are opt-in. Enable them with `--conversation`
-and `--lgtm` when requested. Showing the toggle alone does not authorize a commit; follow
+Conversation and the LGTM toggle are enabled by default. Use `--no-lgtm` for
+read-only reviews. Showing the toggle alone does not authorize a commit; follow
 the user's review and commit approval rules.
 
 ## Steps

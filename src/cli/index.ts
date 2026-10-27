@@ -125,9 +125,10 @@ program
   .option(
     '--lgtm, --ship-it',
     'show an LGTM toggle to approve or revoke approval while the review stays open',
+    true,
   )
   .option('--no-lgtm, --no-ship-it', 'hide the LGTM approval toggle')
-  .option('--conversation', 'enable live comment events and exact-thread agent replies')
+  .option('--conversation', 'enable live comment events and exact-thread agent replies', true)
   .option('--no-conversation', 'disable live comment events and agent replies')
   .option('--include-untracked', 'automatically include untracked files in diff')
   .option('--keep-alive', 'keep server running even after browser disconnects')

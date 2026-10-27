@@ -13,7 +13,7 @@ This fork builds on Yoshiko's diff viewer with a review workflow for coding agen
 - **Comment progress:** see Delivered, Read, Thinking, Replying, Replied, or Noted
   when the agent reports its activity. This does not wake an idle agent automatically.
 - **Reversible LGTM:** approval stays visible and can be revoked. Conversations
-  and the approval toggle are opt-in; approval starts off.
+  and the approval toggle are enabled by default; approval starts off.
 - **Questions and retained discussions:** label a thread as a question, resolve
   and reopen it without losing the history, or explicitly delete it.
 - **Repository information:** expand the Repository info node in the file tree to
@@ -31,7 +31,7 @@ upstream; scoped packaging, publishing, and default flags belong to this fork.
 npx @photostructure/difit .
 ```
 
-Live agent conversations and the reversible LGTM approval toggle are opt-in.
+Live agent conversations and the reversible LGTM approval toggle are enabled by default.
 Approval starts off; click LGTM to approve or revoke. Use `--no-lgtm` for a read-only review
 and `--no-conversation` to disable live events. `--lgtm` and `--ship-it` are aliases.
 The agent must actively watch and answer comments; the viewer does not start an agent.
@@ -201,8 +201,8 @@ Stdin mode is selected with intent-first rules:
 | `--host`              | 127.0.0.1       | Host address to bind server to (use 0.0.0.0 for external access)                                        |
 | `--no-open`           | false           | Don't automatically open browser                                                                        |
 | `--clean`             | false           | Clear all existing comments and viewed files on startup                                                 |
-| `--lgtm, --ship-it`   | false           | Show the LGTM toggle to grant or revoke approval while the review stays open                            |
-| `--conversation`      | false           | Enable live comment events and exact-thread agent replies                                               |
+| `--lgtm, --ship-it`   | true            | Show the LGTM toggle to grant or revoke approval while the review stays open                            |
+| `--conversation`      | true            | Enable live comment events and exact-thread agent replies                                               |
 | `--include-untracked` | false           | Automatically include untracked files in diff (only with `.` or `working`)                              |
 | `--keep-alive`        | false           | Keep server running after browser disconnects (stop manually with Ctrl+C)                               |
 | `--background`        | false           | Keep the server running in the background and output JSON connection info                               |

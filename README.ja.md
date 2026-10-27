@@ -147,8 +147,8 @@ git diff --cached | difit -
 | `--host`              | 127.0.0.1       | サーバーをバインドするホストアドレス（外部からアクセスしたい場合は0.0.0.0を指定）          |
 | `--no-open`           | false           | ブラウザを自動的に開かない                                                                 |
 | `--clean`             | false           | 起動時に既存コメントと閲覧済みファイルをすべてクリア                                       |
-| `--lgtm, --ship-it`   | false           | LGTM の承認を切り替える（レビューを開いたまま承認・取り消し）                              |
-| `--conversation`      | false           | ライブコメントイベントと、指定スレッドへのエージェント返信を有効にする                     |
+| `--lgtm, --ship-it`   | true            | LGTM の承認を切り替える（レビューを開いたまま承認・取り消し）                              |
+| `--conversation`      | true            | ライブコメントイベントと、指定スレッドへのエージェント返信を有効にする                     |
 | `--include-untracked` | false           | diffにuntrackedファイルを自動的に含める（`.`または`working`のみ有効）                      |
 | `--keep-alive`        | false           | ブラウザ切断後もサーバーを終了せず起動したままにする（Ctrl+Cで手動停止）                   |
 | `--background`        | false           | サーバーをバックグラウンドで起動したままにし、接続情報をJSONで出力                         |

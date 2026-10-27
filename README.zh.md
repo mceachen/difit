@@ -147,8 +147,8 @@ git diff --cached | difit -
 | `--host`              | 127.0.0.1      | 绑定服务器的主机地址（使用 0.0.0.0 进行外部访问）                                 |
 | `--no-open`           | false          | 不自动打开浏览器                                                                  |
 | `--clean`             | false          | 启动时清除所有现有评论和已查看的文件                                              |
-| `--lgtm, --ship-it`   | false          | 切换 LGTM 审批，可批准或撤销，并保持评审窗口打开                                  |
-| `--conversation`      | false          | 启用实时评论事件和向指定线程发送的代理回复                                        |
+| `--lgtm, --ship-it`   | true           | 切换 LGTM 审批，可批准或撤销，并保持评审窗口打开                                  |
+| `--conversation`      | true           | 启用实时评论事件和向指定线程发送的代理回复                                        |
 | `--include-untracked` | false          | 自动将 untracked 文件包含在 diff 中（仅在 `.` 或 `working` 时有效）               |
 | `--keep-alive`        | false          | 浏览器断开后保持服务器运行（使用 Ctrl+C 手动停止）                                |
 | `--background`        | false          | 在后台保持服务器运行，并输出 JSON 连接信息                                        |
