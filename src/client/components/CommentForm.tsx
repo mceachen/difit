@@ -1,11 +1,14 @@
 import React, { useRef, useState } from 'react';
 
+import type { CommentIntent } from '../../types/diff';
+
 import { CommentBodyRenderer, hasSuggestionInBody } from './CommentBodyRenderer';
 import type { AppearanceSettings } from './SettingsModal';
 import { SuggestionTemplateButton } from './SuggestionTemplateButton';
 
 export interface CommentSubmitOptions {
   isQuestion: boolean;
+  intent?: CommentIntent;
 }
 
 interface CommentFormProps {
@@ -23,6 +26,9 @@ interface CommentFormProps {
   placeholder?: string;
   autoFocus?: boolean;
   dismissOnOutsideClick?: boolean;
+  showIntent?: boolean;
+  intentValue?: CommentIntent;
+  onIntentChange?: (intent: CommentIntent) => void;
   showQuestionToggle?: boolean;
   questionValue?: boolean;
   onQuestionChange?: (isQuestion: boolean) => void;
@@ -41,7 +47,10 @@ export function CommentForm({
   onChange,
   embedded = false,
   title = 'Add a comment',
-  submitLabel = 'Submit',
+  submitLabel = 'Send',
+  showIntent = !initialValue,
+  intentValue,
+  onIntentChange,
   autoFocus = true,
   dismissOnOutsideClick = true,
   placeholder = 'Leave a comment...',
@@ -55,6 +64,8 @@ export function CommentForm({
     setLocalBody(nextBody);
     onChange?.(nextBody);
   };
+  const [localIntent, setLocalIntent] = useState<CommentIntent>('comment');
+  const intent = intentValue ?? localIntent;
   const [localIsQuestion, setLocalIsQuestion] = useState(false);
   const isQuestion = questionValue ?? localIsQuestion;
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,11 +81,15 @@ export function CommentForm({
 
     setIsSubmitting(true);
     try {
-      await onSubmit(body.trim(), { isQuestion: showQuestionToggle && isQuestion });
+      await onSubmit(body.trim(), {
+        isQuestion: showQuestionToggle && isQuestion,
+        ...(intent !== 'comment' ? { intent } : {}),
+      });
       if (value === undefined) {
         setBody((currentBody) => (currentBody === body ? '' : currentBody));
       }
       setLocalIsQuestion(false);
+      setLocalIntent('comment');
       setMode('edit');
     } catch (error) {
       console.error('Failed to submit comment:', error);
@@ -103,6 +118,26 @@ export function CommentForm({
       data-empty={!body.trim()}
       data-dismiss-on-outside-click={dismissOnOutsideClick}
     >
+      {showIntent && (
+        <label className="mb-2 flex items-center gap-2 text-xs text-github-text-secondary">
+          Intent
+          <select
+            aria-label="Comment intent"
+            value={intent}
+            onChange={(event) => {
+              const nextIntent = event.target.value as CommentIntent;
+              setLocalIntent(nextIntent);
+              onIntentChange?.(nextIntent);
+            }}
+            disabled={isSubmitting}
+            className="rounded border border-github-border bg-github-bg-secondary px-2 py-1"
+          >
+            <option value="comment">Comment</option>
+            <option value="question">Question</option>
+            <option value="change">Request change</option>
+          </select>
+        </label>
+      )}
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium" style={{ color: 'var(--color-yellow-path-text)' }}>
           {title}

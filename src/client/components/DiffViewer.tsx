@@ -5,6 +5,7 @@ import {
   type DiffViewMode,
   type DiffSide,
   type CommentThread,
+  type CommentIntent,
   type LineNumber,
 } from '../../types/diff';
 import { FileLevelTokensProvider } from '../contexts/FileLevelTokensContext';
@@ -41,7 +42,7 @@ interface DiffViewerProps {
   onGenerateThreadPrompt: (thread: CommentThread) => string;
   onToggleThreadResolved: (threadId: string) => void;
   onRemoveThread?: (threadId: string) => void;
-  onReplyToThread: (threadId: string, body: string) => Promise<void>;
+  onReplyToThread: (threadId: string, body: string, intent?: CommentIntent) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
   onUpdateMessage: (threadId: string, messageId: string, newBody: string) => void;
   onSetThreadQuestion?: (threadId: string, isQuestion: boolean) => void;

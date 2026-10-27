@@ -147,14 +147,14 @@ describe('commentImports', () => {
     });
   });
 
-  it('retains general scope and newer resolution across stale merges', () => {
+  it('retains general scope, intent, and newer resolution across stale merges', () => {
     const base = createThread({ id: 'general', body: 'Question' });
     const general: DiffCommentThread = {
       id: base.id,
       scope: 'review',
       createdAt: base.createdAt,
       updatedAt: base.updatedAt,
-      messages: base.messages,
+      messages: base.messages.map((message) => ({ ...message, intent: 'question' as const })),
       resolution: { resolved: false, updatedAt: '2024-03-01T00:00:00.000Z' },
     };
     const stale: DiffCommentThread = {
@@ -169,7 +169,7 @@ describe('commentImports', () => {
       expect(merged[0]).toMatchObject({
         scope: 'review',
         resolution: general.resolution,
-        messages: general.messages,
+        messages: [{ intent: 'question' }],
       });
       expect(merged[0]).not.toHaveProperty('position');
       expect(merged[0]).not.toHaveProperty('filePath');

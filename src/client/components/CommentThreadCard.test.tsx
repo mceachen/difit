@@ -423,7 +423,7 @@ describe('CommentThreadCard', () => {
     await user.type(textarea, 'A new reply');
     await user.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(onReplyToThread).toHaveBeenCalledWith('thread-1', 'A new reply');
+    expect(onReplyToThread).toHaveBeenCalledWith('thread-1', 'A new reply', undefined);
     // Collapses back to the trigger after submitting
     expect(screen.getByRole('button', { name: 'Write a reply...' })).toBeInTheDocument();
   });

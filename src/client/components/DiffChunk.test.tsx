@@ -67,7 +67,7 @@ describe('DiffChunk range comments', () => {
     fireEvent.change(screen.getByRole('textbox'), {
       target: { value: 'Please revisit this range' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => {
       expect(onAddComment).toHaveBeenCalledWith(
@@ -104,7 +104,7 @@ describe('DiffChunk range comments', () => {
     fireEvent.change(screen.getByRole('textbox'), {
       target: { value: 'Please revisit this range' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => {
       expect(onAddComment).toHaveBeenCalledWith(
@@ -141,7 +141,7 @@ describe('DiffChunk range comments', () => {
     fireEvent.change(screen.getByRole('textbox'), {
       target: { value: 'Single line only' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => {
       expect(onAddComment).toHaveBeenCalledWith(12, 'Single line only', 'const third = 3;', 'new', {
@@ -178,7 +178,7 @@ describe('DiffChunk range comments', () => {
     fireEvent.change(screen.getByRole('textbox'), {
       target: { value: 'Please revisit this range' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => {
       expect(onAddComment).toHaveBeenCalledWith(
@@ -218,7 +218,7 @@ describe('DiffChunk range comments', () => {
     fireEvent.change(screen.getByRole('textbox'), {
       target: { value: 'Please revisit this range' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => {
       expect(onAddComment).toHaveBeenCalledWith(

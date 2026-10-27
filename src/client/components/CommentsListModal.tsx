@@ -2,7 +2,7 @@ import { X } from 'lucide-react';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useHotkeys, useHotkeysContext } from 'react-hotkeys-hook';
 
-import type { CommentThread } from '../../types/diff';
+import type { CommentIntent, CommentThread } from '../../types/diff';
 
 import { CommentForm, type CommentSubmitOptions } from './CommentForm';
 import { CommentThreadCard } from './CommentThreadCard';
@@ -18,7 +18,7 @@ interface CommentsListModalProps {
   onToggleThreadResolved: (threadId: string) => void;
   onRemoveThread?: (threadId: string) => void;
   onGenerateThreadPrompt: (thread: CommentThread) => string;
-  onReplyToThread: (threadId: string, body: string) => Promise<void>;
+  onReplyToThread: (threadId: string, body: string, intent?: CommentIntent) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
   onUpdateMessage: (threadId: string, messageId: string, newBody: string) => void;
   onSetThreadQuestion?: (threadId: string, isQuestion: boolean) => void;
@@ -46,7 +46,8 @@ export function CommentsListModal({
   const [generalDraft, setGeneralDraft] = useState<{
     body: string;
     isQuestion: boolean;
-  }>({ body: '', isQuestion: false });
+    intent: CommentIntent;
+  }>({ body: '', isQuestion: false, intent: 'comment' });
   const commentRefs = useRef<(HTMLDivElement | null)[]>([]);
   const dialogRef = useRef<HTMLDivElement>(null);
   const { enableScope, disableScope } = useHotkeysContext();
@@ -230,6 +231,10 @@ export function CommentsListModal({
                       return body === current.body ? current : { ...current, body };
                     })
                   }
+                  intentValue={generalDraft.intent}
+                  onIntentChange={(intent) =>
+                    setGeneralDraft((current) => ({ ...current, intent }))
+                  }
                   showQuestionToggle
                   questionValue={generalDraft.isQuestion}
                   onQuestionChange={(isQuestion) =>
@@ -243,11 +248,13 @@ export function CommentsListModal({
                     const submittedDraft = generalDraft;
                     await onAddGeneralComment(body, options);
                     setGeneralDraft((current) =>
-                      current === submittedDraft ? { body: '', isQuestion: false } : current,
+                      current === submittedDraft
+                        ? { body: '', isQuestion: false, intent: 'comment' }
+                        : current,
                     );
                   }}
                   onCancel={() => {
-                    setGeneralDraft({ body: '', isQuestion: false });
+                    setGeneralDraft({ body: '', isQuestion: false, intent: 'comment' });
                     onClose();
                   }}
                 />

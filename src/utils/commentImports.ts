@@ -320,6 +320,7 @@ function cloneMessage(message: DiffCommentMessage): DiffCommentMessage {
     id: message.id,
     body: message.body,
     author: message.author,
+    intent: message.intent,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
   };

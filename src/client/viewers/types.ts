@@ -1,6 +1,13 @@
 import type { ComponentType } from 'react';
 
-import type { CommentThread, DiffFile, DiffSide, DiffViewMode, LineNumber } from '../../types/diff';
+import type {
+  CommentIntent,
+  CommentThread,
+  DiffFile,
+  DiffSide,
+  DiffViewMode,
+  LineNumber,
+} from '../../types/diff';
 import type { CommentSubmitOptions } from '../components/CommentForm';
 import type { AppearanceSettings } from '../components/SettingsModal';
 import type { CursorPosition } from '../hooks/keyboardNavigation';
@@ -39,7 +46,7 @@ export type DiffViewerBodyProps = {
   onGenerateThreadPrompt: (thread: CommentThread) => string;
   onToggleThreadResolved: (threadId: string) => void;
   onRemoveThread?: (threadId: string) => void;
-  onReplyToThread: (threadId: string, body: string) => Promise<void>;
+  onReplyToThread: (threadId: string, body: string, intent?: CommentIntent) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
   onUpdateMessage: (threadId: string, messageId: string, newBody: string) => void;
   onSetThreadQuestion?: (threadId: string, isQuestion: boolean) => void;

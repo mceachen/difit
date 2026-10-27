@@ -48,6 +48,12 @@ Use the Conversation filter to show open or resolved discussions. Delete is a se
 confirmed action. The CLI provides `comment resolve`, `comment reopen`, and
 `comment delete`; `comment remove` remains an alias for deletion.
 
+## Message intent
+
+Choose Comment, Question, or Request change for a new message or reply. A general
+conversation draft keeps its text, question marker, and intent when the drawer closes
+or a previous send completes. The thread question toggle updates the root message intent.
+
 ## 🚀 Usage
 
 ### Basic Usage

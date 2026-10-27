@@ -140,16 +140,19 @@ describe('Conversation drafts', () => {
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.type(screen.getByRole('textbox'), 'Why this approach?');
     await user.click(screen.getByRole('checkbox', { name: 'Question' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Comment intent' }), 'change');
     await user.click(screen.getByText('Thread A'));
     expect(onNavigate).toHaveBeenCalledWith(inline);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     expect(screen.getByRole('textbox')).toHaveValue('Why this approach?');
     expect(screen.getByRole('checkbox', { name: 'Question' })).toBeChecked();
+    expect(screen.getByRole('combobox', { name: 'Comment intent' })).toHaveValue('change');
     await user.click(screen.getByRole('button', { name: 'Close conversation' }));
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     expect(screen.getByRole('textbox')).toHaveValue('Why this approach?');
     expect(screen.getByRole('checkbox', { name: 'Question' })).toBeChecked();
+    expect(screen.getByRole('combobox', { name: 'Comment intent' })).toHaveValue('change');
   });
 
   it.each(['Cancel', 'Escape'])(
@@ -207,9 +210,11 @@ describe('Conversation drafts', () => {
     await user.clear(screen.getByRole('textbox'));
     await user.type(screen.getByRole('textbox'), 'Second question');
     await user.click(screen.getByRole('checkbox', { name: 'Question' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Comment intent' }), 'change');
     await act(async () => finishSend());
     expect(screen.getByRole('textbox')).toHaveValue('Second question');
     expect(screen.getByRole('checkbox', { name: 'Question' })).toBeChecked();
+    expect(screen.getByRole('combobox', { name: 'Comment intent' })).toHaveValue('change');
   });
 
   it('retains a draft after a failed send and reopening the drawer', async () => {

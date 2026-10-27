@@ -147,6 +147,8 @@ export function formatCommentThreadPrompt(thread: CommentThread): string {
       const authorLabel = message.author?.trim() || 'Unknown';
       sections.push(`Reply ${index} (${authorLabel})`);
     }
+    if (message.intent && message.intent !== 'comment')
+      sections.push(`Intent: ${message.intent === 'question' ? 'Question' : 'Request change'}`);
     sections.push(formatCommentContent(message.body, thread.codeContent));
   });
 

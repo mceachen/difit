@@ -9,6 +9,7 @@ import {
   type DiffSide,
   type LineNumber,
   type CommentThread,
+  type CommentIntent,
   type RevisionsResponse,
 } from '../types/diff';
 import { DEFAULT_DIFF_VIEW_MODE, normalizeDiffViewMode } from '../utils/diffMode';
@@ -1056,6 +1057,7 @@ function App() {
         filePath: file,
         body,
         isQuestion: options?.isQuestion,
+        intent: options?.intent,
         side: side || 'new',
         line: typeof line === 'number' ? line : { start: line[0], end: line[1] },
         codeSnapshot:
@@ -1089,8 +1091,8 @@ function App() {
   };
 
   const handleReplyToThread = useCallback(
-    (threadId: string, body: string): Promise<void> => {
-      replyToThread({ threadId, body });
+    (threadId: string, body: string, intent?: CommentIntent): Promise<void> => {
+      replyToThread({ threadId, body, intent });
       return Promise.resolve();
     },
     [replyToThread],

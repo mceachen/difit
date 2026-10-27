@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   type BaseMode,
   type CommentImport,
+  type CommentIntent,
   type DiffContextStorage,
   type DiffCommentThread,
   type DiffSide,
@@ -22,6 +23,7 @@ import { getLanguageFromPath } from '../utils/diffUtils';
 interface AddThreadParams {
   filePath: string;
   body: string;
+  intent?: CommentIntent;
   side: DiffSide;
   line: number | { start: number; end: number };
   codeSnapshot?: DiffCommentThread['codeSnapshot'];
@@ -31,6 +33,7 @@ interface AddThreadParams {
 interface ReplyToThreadParams {
   threadId: string;
   body: string;
+  intent?: CommentIntent;
 }
 
 interface UseDiffCommentsReturn {
@@ -40,7 +43,10 @@ interface UseDiffCommentsReturn {
   replaceThreads: (threads: DiffCommentThread[]) => void;
   addComment: (params: AddThreadParams) => LegacyDiffComment;
   addThread: (params: AddThreadParams) => DiffCommentThread;
-  addReviewThread: (body: string, options?: { isQuestion?: boolean }) => void;
+  addReviewThread: (
+    body: string,
+    options?: { isQuestion?: boolean; intent?: CommentIntent },
+  ) => void;
   toggleThreadResolved: (threadId: string) => void;
   removeComment: (commentId: string) => void;
   replyToThread: (params: ReplyToThreadParams) => void;
@@ -189,11 +195,12 @@ export function useDiffComments(
           content: '',
           language: getLanguageFromPath(params.filePath),
         },
-        ...(params.isQuestion ? { isQuestion: true } : {}),
+        ...(params.isQuestion || params.intent === 'question' ? { isQuestion: true } : {}),
         messages: [
           {
             id: threadId,
             body: params.body,
+            intent: params.intent ?? (params.isQuestion ? 'question' : undefined),
             author: 'User',
             createdAt: now,
             updatedAt: now,
@@ -209,7 +216,7 @@ export function useDiffComments(
   );
 
   const addReviewThread = useCallback(
-    (body: string, options?: { isQuestion?: boolean }) => {
+    (body: string, options?: { isQuestion?: boolean; intent?: CommentIntent }) => {
       const now = new Date().toISOString();
       const id = createId();
       saveThreads([
@@ -217,10 +224,19 @@ export function useDiffComments(
         {
           id,
           scope: 'review',
-          ...(options?.isQuestion ? { isQuestion: true } : {}),
+          isQuestion: options?.isQuestion || options?.intent === 'question' || undefined,
           createdAt: now,
           updatedAt: now,
-          messages: [{ id, body, author: 'User', createdAt: now, updatedAt: now }],
+          messages: [
+            {
+              id,
+              body,
+              intent: options?.intent ?? (options?.isQuestion ? 'question' : undefined),
+              author: 'User',
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
         },
       ]);
     },
@@ -258,7 +274,7 @@ export function useDiffComments(
   );
 
   const replyToThread = useCallback(
-    ({ threadId, body }: ReplyToThreadParams) => {
+    ({ threadId, body, intent }: ReplyToThreadParams) => {
       const now = new Date().toISOString();
       const newThreads = threads.map((thread) =>
         thread.id === threadId
@@ -270,6 +286,7 @@ export function useDiffComments(
                 {
                   id: createId(),
                   body,
+                  intent,
                   author: 'User',
                   createdAt: now,
                   updatedAt: now,
@@ -350,10 +367,28 @@ export function useDiffComments(
   const setThreadQuestion = useCallback(
     (threadId: string, isQuestion: boolean) => {
       const now = new Date().toISOString();
-      const newThreads = threads.map((thread) =>
-        thread.id === threadId
-          ? { ...thread, isQuestion: isQuestion || undefined, updatedAt: now }
-          : thread,
+      const newThreads = threads.map(
+        (thread): DiffCommentThread =>
+          thread.id === threadId
+            ? {
+                ...thread,
+                isQuestion: isQuestion || undefined,
+                updatedAt: now,
+                messages: thread.messages.map((message, index) =>
+                  index === 0
+                    ? {
+                        ...message,
+                        intent: isQuestion
+                          ? 'question'
+                          : message.intent === 'question'
+                            ? 'comment'
+                            : message.intent,
+                        updatedAt: now,
+                      }
+                    : message,
+                ),
+              }
+            : thread,
       );
       saveThreads(newThreads);
     },

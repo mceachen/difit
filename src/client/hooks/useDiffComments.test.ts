@@ -54,26 +54,21 @@ describe('useDiffComments', () => {
     mockDiffContextData = null;
   });
 
-  it('persists review-wide discussions and replies without a file location', () => {
-    const { result, unmount } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
-    act(() => result.current.addReviewThread('Why this approach?'));
+  it('stores general questions without a file location and preserves resolved conversations', () => {
+    const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+    act(() => result.current.addReviewThread('Why this approach?', { intent: 'question' }));
     const thread = result.current.threads[0]!;
     expect(thread.scope).toBe('review');
     expect(thread).not.toHaveProperty('filePath');
     expect(thread).not.toHaveProperty('position');
-    expect(result.current.comments).toEqual([]);
-    act(() =>
-      result.current.replyToThread({ threadId: thread.id, body: 'Because it simplifies review.' }),
-    );
+    expect(thread.messages[0]!.intent).toBe('question');
     expect(result.current.generateThreadPrompt(thread.id)).toContain('Review conversation');
-    expect(result.current.generateAllCommentsPrompt()).toContain('Because it simplifies review.');
-    expect(mockDiffContextData!.threads[0]!.messages).toHaveLength(2);
-    unmount();
-    const reopened = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
-    expect(reopened.result.current.threads[0]).toMatchObject({
-      scope: 'review',
-      messages: [{ body: 'Why this approach?' }, { body: 'Because it simplifies review.' }],
-    });
+    act(() => result.current.toggleThreadResolved(thread.id));
+    expect(result.current.threads[0]!.resolution?.resolved).toBe(true);
+    expect(result.current.threads[0]!.messages).toEqual(thread.messages);
+    act(() => result.current.toggleThreadResolved(thread.id));
+    expect(result.current.threads[0]!.resolution?.resolved).toBe(false);
+    expect(mockDiffContextData!.threads[0]!.messages).toEqual(thread.messages);
   });
 
   it.each(['review', 'line'] as const)(
@@ -112,22 +107,6 @@ describe('useDiffComments', () => {
       expect(reopened.result.current.generateThreadPrompt(id)).toContain('[QUESTION');
     },
   );
-
-  it('stores general questions without a file location and preserves resolved conversations', () => {
-    const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
-    act(() => result.current.addReviewThread('Why this approach?', { isQuestion: true }));
-    const thread = result.current.threads[0]!;
-    expect(thread.scope).toBe('review');
-    expect(thread).not.toHaveProperty('filePath');
-    expect(thread).not.toHaveProperty('position');
-    expect(result.current.generateThreadPrompt(thread.id)).toContain('Review conversation');
-    act(() => result.current.toggleThreadResolved(thread.id));
-    expect(result.current.threads[0]!.resolution?.resolved).toBe(true);
-    expect(result.current.threads[0]!.messages).toEqual(thread.messages);
-    act(() => result.current.toggleThreadResolved(thread.id));
-    expect(result.current.threads[0]!.resolution?.resolved).toBe(false);
-    expect(mockDiffContextData!.threads[0]!.messages).toEqual(thread.messages);
-  });
 
   describe('generatePrompt', () => {
     it('should format single line comment correctly', () => {

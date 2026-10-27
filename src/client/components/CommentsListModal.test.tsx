@@ -96,6 +96,7 @@ describe('CommentsListModal', () => {
         {
           id: 'general-msg',
           body: 'Review-wide question',
+          intent: 'question',
           author: 'User',
           createdAt: '2024-01-01',
           updatedAt: '2024-01-01',
@@ -122,9 +123,11 @@ describe('CommentsListModal', () => {
       screen.getByPlaceholderText('Comment or ask about this review…'),
       'How does this work?',
     );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Comment intent' }), 'question');
     await user.click(screen.getByRole('button', { name: 'Send' }));
     expect(onAddGeneralComment).toHaveBeenCalledWith('How does this work?', {
       isQuestion: false,
+      intent: 'question',
     });
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Conversation filter' }),

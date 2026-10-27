@@ -377,7 +377,7 @@ Explain why this was removed.`);
   });
 });
 
-it('keeps each reply below its header in a resolved general conversation', () => {
+it('keeps each reply intent below its header in a resolved general conversation', () => {
   const time = '2026-10-24T00:00:00Z';
   expect(
     formatCommentThreadPrompt({
@@ -391,6 +391,7 @@ it('keeps each reply below its header in a resolved general conversation', () =>
         {
           id: 'question',
           author: 'User',
+          intent: 'question',
           body: 'Why?',
           createdAt: time,
           updatedAt: time,
@@ -398,6 +399,7 @@ it('keeps each reply below its header in a resolved general conversation', () =>
         {
           id: 'change',
           author: 'User',
+          intent: 'change',
           body: 'Please change this.',
           createdAt: time,
           updatedAt: time,
@@ -405,6 +407,6 @@ it('keeps each reply below its header in a resolved general conversation', () =>
       ],
     }),
   ).toBe(
-    'Review conversation\nStatus: resolved\nRoot comment\nReply 1 (User)\nWhy?\nReply 2 (User)\nPlease change this.',
+    'Review conversation\nStatus: resolved\nRoot comment\nReply 1 (User)\nIntent: Question\nWhy?\nReply 2 (User)\nIntent: Request change\nPlease change this.',
   );
 });

@@ -644,6 +644,7 @@ export async function startServer(
                 : `${threadId}:${index}`,
             body: message.body,
             author: message.author,
+            intent: message.intent,
             createdAt: message.createdAt || thread.createdAt || now,
             updatedAt: message.updatedAt || message.createdAt || thread.updatedAt || now,
           }))

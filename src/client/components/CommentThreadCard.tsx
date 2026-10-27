@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
-import { type CommentThread, type DiffCommentMessage } from '../../types/diff';
+import { type CommentIntent, type CommentThread, type DiffCommentMessage } from '../../types/diff';
 import { useClickOutside } from '../hooks/useClickOutside';
 import { copyTextToClipboard } from '../utils/clipboard';
 
@@ -112,6 +112,11 @@ function ThreadMessageItem({
               </div>
             )}
 
+            {message.intent && message.intent !== 'comment' && (
+              <span className="mb-2 inline-block rounded border border-github-border px-1.5 py-0.5 text-xs text-github-text-secondary">
+                {message.intent === 'question' ? 'Question' : 'Request change'}
+              </span>
+            )}
             <CommentBodyRenderer
               body={message.body}
               originalCode={originalCode}
@@ -233,7 +238,7 @@ interface CommentThreadCardProps {
   onGeneratePrompt: (thread: CommentThread) => string;
   onToggleThreadResolved: (threadId: string) => void;
   onRemoveThread?: (threadId: string) => void;
-  onReplyToThread: (threadId: string, body: string) => Promise<void>;
+  onReplyToThread: (threadId: string, body: string, intent?: CommentIntent) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
   onUpdateMessage: (threadId: string, messageId: string, newBody: string) => void;
   onSetThreadQuestion?: (threadId: string, isQuestion: boolean) => void;
@@ -453,8 +458,8 @@ export function CommentThreadCard({
           >
             {isReplying ? (
               <CommentForm
-                onSubmit={async (body) => {
-                  await onReplyToThread(thread.id, body);
+                onSubmit={async (body, options) => {
+                  await onReplyToThread(thread.id, body, options.intent);
                   setIsReplying(false);
                 }}
                 onCancel={() => setIsReplying(false)}
