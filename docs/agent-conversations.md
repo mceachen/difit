@@ -23,3 +23,12 @@ origin so the watcher can avoid replying to itself.
 `difit comment resolve <thread-id> --port <port> --review <review-id>` retains a discussion;
 `comment reopen` reopens it. `comment delete` explicitly removes the thread from the
 current selection. Watching does not start or wake an agent automatically.
+
+## Agent progress
+
+Watch acknowledges received user events as Delivered. Report Read, Thinking, Replying,
+or Noted with `difit comment status --port <port> < /tmp/status.json`. The JSON contains
+`reviewId`, `threadId`, `messageId`, `cursor`, and `status`. Replayed deliveries cannot
+move progress backwards. A reply including the event cursor marks that revision Replied;
+stale revisions are rejected after edits. Noted does not manufacture a reply or resolve
+a thread. Activity is process-local and is not restored from browser storage.

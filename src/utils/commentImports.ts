@@ -324,6 +324,7 @@ function cloneMessage(message: DiffCommentMessage): DiffCommentMessage {
     author: message.author,
     origin: message.origin,
     intent: message.intent,
+    progress: message.progress ? { ...message.progress } : undefined,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
   };
@@ -394,7 +395,14 @@ function pickNewerMessage(
   incomingMessage: DiffCommentMessage,
 ): DiffCommentMessage {
   if (incomingMessage.updatedAt.localeCompare(existingMessage.updatedAt) >= 0) {
-    return cloneMessage(incomingMessage);
+    const message = cloneMessage(incomingMessage);
+    // Existing threads are the server snapshot; browser storage cannot attest
+    // to current agent activity. A local body edit also invalidates old progress.
+    message.progress =
+      incomingMessage.body === existingMessage.body && existingMessage.progress
+        ? { ...existingMessage.progress }
+        : undefined;
+    return message;
   }
 
   return cloneMessage(existingMessage);
@@ -455,7 +463,11 @@ export function mergeCommentThreads(
 ): MergeCommentImportsResult {
   const threads = existingThreads.map(cloneThread);
 
-  for (const incomingThread of incomingThreads) {
+  for (const candidate of incomingThreads) {
+    const incomingThread = {
+      ...candidate,
+      messages: candidate.messages.map((message) => ({ ...message, progress: undefined })),
+    };
     const existingIndex = threads.findIndex((thread) => threadsMatch(thread, incomingThread));
     if (existingIndex < 0) {
       threads.push(cloneThread(incomingThread));

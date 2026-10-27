@@ -78,6 +78,13 @@ function normalizeRootComment(thread: DiffCommentThread): LegacyDiffComment | nu
   };
 }
 
+function withoutProgress(threads: DiffCommentThread[]): DiffCommentThread[] {
+  return threads.map((thread) => ({
+    ...thread,
+    messages: thread.messages.map((message) => ({ ...message, progress: undefined })),
+  }));
+}
+
 export function useDiffComments(
   baseCommitish?: string,
   targetCommitish?: string,
@@ -140,7 +147,8 @@ export function useDiffComments(
         repositoryId,
         baseMode,
       );
-    setThreads(loadedThreads);
+    // Persisted activity belongs to an earlier connection, never the current agent.
+    setThreads(withoutProgress(loadedThreads));
     setHasLoadedComments(true);
   }, [
     baseCommitish,
@@ -159,7 +167,7 @@ export function useDiffComments(
       storageService.saveCommentThreads(
         baseCommitish,
         targetCommitish,
-        newThreads,
+        withoutProgress(newThreads),
         currentCommitHash,
         branchToHash,
         repositoryId,
@@ -354,7 +362,9 @@ export function useDiffComments(
               ...thread,
               updatedAt: now,
               messages: thread.messages.map((message) =>
-                message.id === messageId ? { ...message, body: newBody, updatedAt: now } : message,
+                message.id === messageId
+                  ? { ...message, body: newBody, updatedAt: now, progress: undefined }
+                  : message,
               ),
             }
           : thread,
@@ -385,6 +395,7 @@ export function useDiffComments(
                             ? 'comment'
                             : message.intent,
                         updatedAt: now,
+                        progress: undefined,
                       }
                     : message,
                 ),

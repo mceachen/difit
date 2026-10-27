@@ -729,6 +729,11 @@ export async function startServer(
     nextThreads: DiffCommentThread[],
     origin: 'user' | 'agent' = 'user',
   ): boolean {
+    // Progress is process-local agent state, never restored or overwritten by browser payloads.
+    nextThreads = nextThreads.map((thread) => ({
+      ...thread,
+      messages: thread.messages.map((message) => ({ ...message, progress: undefined })),
+    }));
     const session = getOrCreateCommentSession(selection);
     const previous = JSON.stringify(session.threads);
     const next = JSON.stringify(nextThreads);
@@ -750,9 +755,19 @@ export async function startServer(
   }
 
   if (conversation) {
-    registerConversationRoutes(app, conversation, (selection, threads) => {
-      updateCommentSession(selection, threads, 'agent');
-    });
+    registerConversationRoutes(
+      app,
+      conversation,
+      (selection, threads) => {
+        updateCommentSession(selection, threads, 'agent');
+      },
+      (selection) =>
+        fileWatcher.broadcast({
+          type: 'commentsChanged',
+          version: getOrCreateCommentSession(selection).version,
+          timestamp: new Date().toISOString(),
+        }),
+    );
   }
 
   app.post('/api/comments', (req, res) => {
@@ -777,7 +792,7 @@ export async function startServer(
         success: true,
         merged: isStale,
         version: session.version,
-        threads: session.threads,
+        threads: conversation?.withProgress(selection, session.threads) ?? session.threads,
       });
     } catch (error) {
       console.error('Error parsing comments:', error);
@@ -873,7 +888,7 @@ export async function startServer(
     const session = getOrCreateCommentSession(selection);
     res.json({
       version: session.version,
-      threads: session.threads,
+      threads: conversation?.withProgress(selection, session.threads) ?? session.threads,
     });
   });
 

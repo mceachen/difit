@@ -68,7 +68,28 @@ export function addConversationCommands(comment: Command): void {
           );
           await checkResponse(response);
           const batch = (await response.json()) as ConversationBatch;
-          for (const event of batch.events) console.log(JSON.stringify(event));
+          for (const event of batch.events) {
+            if (event.origin === 'user') {
+              const receipt = await fetch(
+                `http://localhost:${options.port}/api/conversation/status`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    reviewId: event.reviewId,
+                    threadId: event.threadId,
+                    messageId: event.messageId,
+                    cursor: event.cursor,
+                    status: 'delivered',
+                  }),
+                  signal: AbortSignal.timeout(30000),
+                },
+              );
+              // A replay can include a deleted comment or wording superseded by a later event.
+              if (receipt.status !== 404 && receipt.status !== 409) await checkResponse(receipt);
+            }
+            console.log(JSON.stringify(event));
+          }
           cursor = batch.cursor;
           console.log(JSON.stringify({ type: 'conversation.cursor', cursor }));
         } while (!options.once);
@@ -96,9 +117,37 @@ export function addConversationCommands(comment: Command): void {
     });
 
   comment
+    .command('status')
+    .description(
+      'Report read, thinking, replying, or noted for an exact comment revision; accepts JSON via stdin',
+    )
+    .argument('[json]', 'JSON with reviewId, threadId, messageId, cursor, and status')
+    .requiredOption('--port <port>', 'port of a difit --conversation server', (value: string) =>
+      integerInRange(value, 1, 65535),
+    )
+    .action(async (json: string | undefined, options: { port: number }) => {
+      try {
+        if (json === undefined && detectStdinSource() === 'tty') {
+          throw new Error('Provide status JSON as an argument or via stdin');
+        }
+        const body: unknown = JSON.parse(json ?? (await readStdin()));
+        const response = await fetch(`http://localhost:${options.port}/api/conversation/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(30000),
+        });
+        await checkResponse(response);
+        console.log(JSON.stringify(await response.json()));
+      } catch (error) {
+        reportError(error, options.port);
+      }
+    });
+
+  comment
     .command('reply')
     .description('Reply to an exact review/thread/message using event IDs; accepts JSON via stdin')
-    .argument('[json]', 'JSON with reviewId, threadId, inReplyTo, body, and optional author')
+    .argument('[json]', 'JSON with reviewId, threadId, inReplyTo, body, and optional cursor/author')
     .requiredOption('--port <port>', 'port of a difit --conversation server', (value: string) =>
       integerInRange(value, 1, 65535),
     )

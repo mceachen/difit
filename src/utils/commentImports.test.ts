@@ -293,6 +293,24 @@ describe('commentImports', () => {
   });
 });
 
+// Bootstrap treats the first argument as the server snapshot. Progress must not
+// come from persisted browser data. Run: pnpm test src/utils/commentImports.test.ts
+it('keeps server progress when restoring cached comments and clears it on local edits', () => {
+  const server = createThread({ id: 'question', body: 'Why?' });
+  server.messages[0]!.progress = {
+    status: 'thinking',
+    cursor: 'new:1',
+    updatedAt: server.updatedAt,
+  };
+  const cached = structuredClone(server);
+  cached.messages[0]!.progress = { status: 'read', cursor: 'old:1', updatedAt: cached.updatedAt };
+  expect(mergeCommentThreads([server], [cached]).threads[0]!.messages[0]!.progress).toEqual(
+    server.messages[0]!.progress,
+  );
+  expect(mergeCommentThreads([], [cached]).threads[0]!.messages[0]!.progress).toBeUndefined();
+  cached.messages[0]!.body = 'Edited question';
+  expect(mergeCommentThreads([server], [cached]).threads[0]!.messages[0]!.progress).toBeUndefined();
+});
 it('merges review-wide replies in either order without inventing a location', () => {
   const root = createThread({ id: 'general', body: 'Review-wide discussion' });
   const general: DiffCommentThread = {

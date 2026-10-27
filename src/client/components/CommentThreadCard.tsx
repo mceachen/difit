@@ -5,6 +5,7 @@ import {
   Copy,
   Edit2,
   HelpCircle,
+  LoaderCircle,
   MessageSquare,
   Trash2,
 } from 'lucide-react';
@@ -59,6 +60,7 @@ function ThreadMessageItem({
   const confirmContainerRef = useRef<HTMLDivElement>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const showAuthorHeader = showAuthorBadge && Boolean(message.author);
+  const progress = message.origin !== 'agent' ? message.progress : undefined;
   const isUserAuthoredMessage = message.author?.trim() === 'User';
 
   useClickOutside(confirmContainerRef, () => setPendingAction(null), isConfirming);
@@ -116,6 +118,25 @@ function ThreadMessageItem({
               <span className="mb-2 inline-block rounded border border-github-border px-1.5 py-0.5 text-xs text-github-text-secondary">
                 {message.intent === 'question' ? 'Question' : 'Request change'}
               </span>
+            )}
+            {progress && (
+              <div
+                role="status"
+                className="mb-2 flex items-center gap-1.5 text-xs text-github-text-secondary"
+                title={`Agent progress last updated ${new Date(progress.updatedAt).toLocaleString()}`}
+              >
+                {(progress.status === 'thinking' || progress.status === 'replying') && (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    size={12}
+                    className="animate-spin motion-reduce:animate-none"
+                  />
+                )}
+                {(progress.status === 'replied' || progress.status === 'noted') && (
+                  <Check aria-hidden="true" size={12} />
+                )}
+                <span>{progress.status.charAt(0).toUpperCase() + progress.status.slice(1)}</span>
+              </div>
             )}
             <CommentBodyRenderer
               body={message.body}

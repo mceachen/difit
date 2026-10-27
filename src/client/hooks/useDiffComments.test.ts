@@ -1,9 +1,8 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { Conversation } from '../../server/conversation';
-
 import type { DiffContextStorage } from '../../types/diff';
+import { Conversation } from '../../server/conversation';
 import { useDiffComments } from './useDiffComments';
 
 // Mock StorageService
@@ -73,6 +72,47 @@ describe('useDiffComments', () => {
     expect(mockDiffContextData!.threads[0]!.messages).toEqual(thread.messages);
   });
 
+  it('keeps live progress in memory but never persists or restores it', () => {
+    const { result, unmount } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+    act(() => {
+      result.current.addComment({ filePath: 'a.ts', body: 'Why?', side: 'new', line: 1 });
+    });
+    const live = structuredClone(result.current.threads);
+    live[0]!.messages[0]!.progress = {
+      status: 'thinking',
+      cursor: 'stream:1',
+      updatedAt: '2026-10-24T00:00:00Z',
+    };
+    act(() => result.current.replaceThreads(live));
+    expect(result.current.threads[0]!.messages[0]!.progress?.status).toBe('thinking');
+    expect(mockDiffContextData!.threads[0]!.messages[0]!.progress).toBeUndefined();
+    // Earlier builds of this feature wrote progress to the live review's browser storage.
+    mockDiffContextData!.threads = structuredClone(live);
+    unmount();
+    const reopened = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+    expect(reopened.result.current.threads[0]!.messages[0]!.progress).toBeUndefined();
+    expect(reopened.result.current.threads[0]!.messages[0]!.body).toBe('Why?');
+  });
+
+  it('clears progress immediately when editing a message', () => {
+    const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+    act(() => {
+      result.current.addComment({ filePath: 'a.ts', body: 'Why?', side: 'new', line: 1 });
+    });
+    const live = structuredClone(result.current.threads);
+    const thread = live[0]!;
+    const message = thread.messages[0]!;
+    message.progress = {
+      status: 'replied',
+      cursor: 'stream:1',
+      updatedAt: '2026-10-24T00:00:00Z',
+    };
+    act(() => result.current.replaceThreads(live));
+    act(() => result.current.updateMessage(thread.id, message.id, 'Different question'));
+    expect(result.current.threads[0]!.messages[0]!.progress).toBeUndefined();
+    expect(mockDiffContextData!.threads[0]!.messages[0]!.progress).toBeUndefined();
+  });
+
   it('delivers a question toggle on an imported finding as a user revision', () => {
     const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
     act(() => {
@@ -103,6 +143,7 @@ describe('useDiffComments', () => {
     expect(journal.read(cursor).events).toEqual([
       expect.objectContaining({ type: 'comment.updated', origin: 'user', intent: 'question' }),
     ]);
+    expect(journal.snapshot().reviews[0]!.threads[0]!.messages[0]!.progress?.status).toBe('queued');
   });
 
   it.each(['review', 'line'] as const)(

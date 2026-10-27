@@ -51,6 +51,49 @@ describe('conversation commands', () => {
     expect(error).not.toHaveBeenCalled();
   });
 
+  it('acknowledges received user events before printing the checkpoint', async () => {
+    const event = { origin: 'user', reviewId: 'r', threadId: 't', messageId: 'm', cursor: 's:1' };
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ events: [event], cursor: 's:1' })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true })));
+    await createCommentCommand().parseAsync(['node', 'difit', 'watch', '--port', '4966', '--once']);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:4966/api/conversation/status',
+      expect.objectContaining({
+        body: JSON.stringify({
+          reviewId: 'r',
+          threadId: 't',
+          messageId: 'm',
+          cursor: 's:1',
+          status: 'delivered',
+        }),
+      }),
+    );
+    expect(log).toHaveBeenLastCalledWith(
+      JSON.stringify({ type: 'conversation.cursor', cursor: 's:1' }),
+    );
+  });
+
+  it('sends an explicit thinking status from stdin', async () => {
+    const status = {
+      reviewId: 'r',
+      threadId: 't',
+      messageId: 'm',
+      cursor: 's:1',
+      status: 'thinking',
+    };
+    vi.mocked(detectStdinSource).mockReturnValue('pipe');
+    vi.mocked(readStdin).mockResolvedValue(JSON.stringify(status));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true })));
+    await createCommentCommand().parseAsync(['node', 'difit', 'status', '--port', '4966']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4966/api/conversation/status',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(status) }),
+    );
+    expect(error).not.toHaveBeenCalled();
+  });
+
   it('keeps cursor errors on stderr and exits unsuccessfully', async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ error: 'Conversation cursor expired' }), { status: 409 }),

@@ -98,6 +98,33 @@ describe('CommentThreadCard', () => {
     expect(onToggleThreadResolved).toHaveBeenCalledWith('thread-1');
   });
 
+  it.each(['queued', 'delivered', 'read', 'thinking', 'replying', 'noted', 'replied'] as const)(
+    'shows %s progress even when author badges are hidden',
+    (status) => {
+      render(
+        <CommentThreadCard
+          thread={{
+            ...mockThread,
+            messages: [
+              {
+                ...mockThread.messages[0]!,
+                progress: { status, cursor: 'stream:1', updatedAt: '2026-10-24T00:00:00Z' },
+              },
+            ],
+          }}
+          onGeneratePrompt={() => ''}
+          onToggleThreadResolved={vi.fn()}
+          onReplyToThread={vi.fn()}
+          onRemoveMessage={vi.fn()}
+          onUpdateMessage={vi.fn()}
+        />,
+      );
+      expect(screen.getByRole('status')).toHaveTextContent(
+        status[0]!.toUpperCase() + status.slice(1),
+      );
+    },
+  );
+
   it('does not show delete action for replies authored by someone else', () => {
     render(
       <CommentThreadCard

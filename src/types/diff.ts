@@ -110,11 +110,18 @@ export interface LegacyDiffComment {
   codeSnapshot?: DiffCommentCodeSnapshot;
 }
 
+export interface CommentProgress {
+  status: 'queued' | 'delivered' | 'read' | 'thinking' | 'replying' | 'noted' | 'replied';
+  cursor: string;
+  updatedAt: string;
+}
+
 export type CommentIntent = 'comment' | 'question' | 'change';
 
 export interface DiffCommentMessage {
-  origin?: 'user' | 'agent';
   id: string;
+  origin?: 'user' | 'agent';
+  progress?: CommentProgress;
   intent?: CommentIntent;
   body: string;
   author?: string;

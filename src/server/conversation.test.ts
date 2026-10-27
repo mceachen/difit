@@ -53,14 +53,39 @@ describe('Conversation journal', () => {
         reviewId: first.events[0]!.reviewId,
       }),
     ]);
-    expect(first.events[0]!.body).toBe('Why 42?\nPlease explain.');
+    expect(first.events[0]).toMatchObject({ body: 'Why 42?\nPlease explain.' });
+  });
+
+  it('tracks progress per revision without emitting comment events or regressing on replay', () => {
+    const journal = new Conversation();
+    journal.update(selection, [], [thread], 'user');
+    const event = journal.read().events[0]!;
+    const set = (status: 'delivered' | 'thinking' | 'read' | 'replied') =>
+      journal.setProgress(event.reviewId, event.threadId, event.messageId, event.cursor, status);
+    const progress = () => journal.snapshot().reviews[0]!.threads[0]!.messages[0]!.progress;
+    expect(progress()?.status).toBe('queued');
+    set('delivered');
+    set('thinking');
+    set('read');
+    expect(progress()?.status).toBe('thinking');
+    expect(journal.read(event.cursor).events).toEqual([]);
+    set('replied');
+    set('delivered');
+    expect(progress()?.status).toBe('replied');
+    const edited = structuredClone(thread);
+    edited.messages[0]!.body = 'Different question';
+    journal.update(selection, [thread], [edited], 'user');
+    expect(progress()?.status).toBe('queued');
+    expect(() => set('thinking')).toThrow('Comment changed');
+    journal.update(selection, [edited], [], 'user');
+    expect(() => set('thinking')).toThrow('no longer exists');
   });
 
   it('delivers a submitted comment to an already waiting consumer', async () => {
     const journal = new Conversation();
     const waiting = journal.wait(journal.cursor, 25000, new AbortController().signal);
     journal.update(selection, [], [thread], 'user');
-    expect((await waiting).events[0]?.body).toBe('Why 42?\nPlease explain.');
+    expect((await waiting).events[0]).toMatchObject({ body: 'Why 42?\nPlease explain.' });
   });
 
   it('releases a cancelled wait without consuming another client’s events', async () => {

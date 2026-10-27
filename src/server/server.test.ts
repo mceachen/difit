@@ -1809,6 +1809,7 @@ describe('Server Integration Tests', () => {
       expect(data2.clearComments).toBe(true);
     });
   });
+
   describe('Conversation API', () => {
     it('streams general questions and resolves/reopens their exact review without deleting messages', async () => {
       const { port, server } = await startServer({ conversation: true, keepAlive: true });
@@ -1872,11 +1873,130 @@ describe('Server Integration Tests', () => {
         };
         expect(saved.threads[0]!.resolution?.resolved).toBe(resolved);
         expect(saved.threads[0]!.messages).toHaveLength(2);
+        expect(saved.threads[0]!.messages[0]!.progress?.status).toBe('replied');
         const other = (await (await fetch(`${origin}/api/comments-json`)).json()) as {
           threads: import('../types/diff.js').DiffCommentThread[];
         };
         expect(other.threads[0]!.resolution).toBeUndefined();
       }
+    });
+
+    it('accepts Noted without manufacturing a reply or resolving the thread', async () => {
+      const { port, server } = await startServer({ conversation: true, keepAlive: true });
+      servers.push(server);
+      const origin = `http://localhost:${port}`;
+      const post = (path: string, body: unknown) =>
+        fetch(`${origin}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      await post('/api/comments', {
+        comments: [{ id: 'note', file: 'a.ts', line: 1, body: 'Looks good.' }],
+      });
+      const batch = (await (
+        await fetch(`${origin}/api/conversation/events?wait=0`)
+      ).json()) as ConversationBatch;
+      const event = batch.events[0]!;
+      expect((await post('/api/conversation/status', { ...event, status: 'noted' })).status).toBe(
+        200,
+      );
+      const snapshot = (await (await fetch(`${origin}/api/conversation/snapshot`)).json()) as {
+        reviews: { threads: import('../types/diff.js').DiffCommentThread[] }[];
+      };
+      const thread = snapshot.reviews[0]!.threads[0]!;
+      expect(thread.messages).toHaveLength(1);
+      expect(thread.messages[0]!.progress?.status).toBe('noted');
+      expect(thread.resolution).toBeUndefined();
+    });
+
+    it('projects agent progress, ignores browser status, and rejects stale replies after edits', async () => {
+      const { port, server } = await startServer({ conversation: true, keepAlive: true });
+      servers.push(server);
+      const origin = `http://localhost:${port}`;
+      const post = (path: string, body: unknown) =>
+        fetch(`${origin}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      const getThreads = async () =>
+        (await (await fetch(`${origin}/api/comments-json`)).json()) as {
+          version: number;
+          threads: import('../types/diff.js').DiffCommentThread[];
+        };
+      await post('/api/comments', {
+        comments: [{ id: 'q', file: 'a.ts', line: 1, body: 'Question' }],
+      });
+      const batch = (await (
+        await fetch(`${origin}/api/conversation/events?wait=0`)
+      ).json()) as ConversationBatch;
+      const event = batch.events[0]!;
+      const identity = {
+        reviewId: event.reviewId,
+        threadId: event.threadId,
+        messageId: event.messageId,
+        cursor: event.cursor,
+      };
+      const initial = await getThreads();
+      expect(initial.threads[0]!.messages[0]!.progress?.status).toBe('queued');
+      for (const status of ['delivered', 'read', 'thinking', 'replying']) {
+        expect((await post('/api/conversation/status', { ...identity, status })).status).toBe(200);
+        expect((await getThreads()).threads[0]!.messages[0]!.progress?.status).toBe(status);
+      }
+      // A browser's old view cannot overwrite agent progress or manufacture a new journal event.
+      await post('/api/comments', initial);
+      expect((await getThreads()).threads[0]!.messages[0]!.progress?.status).toBe('replying');
+      const unchanged = (await (
+        await fetch(`${origin}/api/conversation/events?wait=0&after=${batch.cursor}`)
+      ).json()) as ConversationBatch;
+      expect(unchanged.events).toEqual([]);
+      expect(
+        (await post('/api/conversation/status', { ...identity, status: 'replied' })).status,
+      ).toBe(400);
+      const reply = {
+        reviewId: event.reviewId,
+        threadId: event.threadId,
+        inReplyTo: event.messageId,
+        cursor: event.cursor,
+        body: 'Answer',
+      };
+      const invalidReply = await post('/api/conversation/reply', { ...reply, cursor: null });
+      expect(invalidReply.status).toBe(400);
+      expect(await invalidReply.json()).toEqual({
+        error: 'Expected reviewId, threadId, inReplyTo, body, and optional cursor and author',
+      });
+      expect((await post('/api/conversation/reply', reply)).status).toBe(200);
+      const originalReplyId = (await getThreads()).threads[0]!.messages[1]!.id;
+      expect((await getThreads()).threads[0]!.messages[0]!.progress?.status).toBe('replied');
+      const edited = await getThreads();
+      edited.threads[0]!.messages[0]!.body = 'Edited question';
+      await post('/api/comments', edited);
+      expect((await getThreads()).threads[0]!.messages[0]!.progress?.status).toBe('queued');
+      expect(
+        (await post('/api/conversation/status', { ...identity, status: 'thinking' })).status,
+      ).toBe(409);
+      expect((await post('/api/conversation/reply', reply)).status).toBe(409);
+      expect((await post('/api/conversation/reply', { ...reply, cursor: undefined })).status).toBe(
+        200,
+      );
+      const afterLegacyReply = await getThreads();
+      expect(afterLegacyReply.threads[0]!.messages[0]!.progress?.status).toBe('queued');
+      const nextCursor = afterLegacyReply.threads[0]!.messages[0]!.progress!.cursor;
+      const nextReply = { ...reply, cursor: nextCursor };
+      expect((await post('/api/conversation/reply', nextReply)).status).toBe(200);
+      const afterNewReply = await getThreads();
+      expect(afterNewReply.threads[0]!.messages[0]!.progress?.status).toBe('replied');
+      expect(afterNewReply.threads[0]!.messages).toHaveLength(
+        afterLegacyReply.threads[0]!.messages.length + 1,
+      );
+      expect(afterNewReply.threads[0]!.messages.at(-1)!.id).not.toBe(originalReplyId);
+      expect((await post('/api/conversation/reply', nextReply)).status).toBe(200);
+      expect((await getThreads()).threads[0]!.messages).toEqual(afterNewReply.threads[0]!.messages);
+      await fetch(`${origin}/api/comments/${event.threadId}`, { method: 'DELETE' });
+      expect((await post('/api/conversation/status', { ...identity, status: 'read' })).status).toBe(
+        404,
+      );
     });
 
     it('delivers comments before approval and routes idempotent replies to the original review', async () => {
