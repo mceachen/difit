@@ -3,6 +3,7 @@ import { Command, Option } from 'commander';
 import { parseCommentImportValue } from '../utils/commentImports.js';
 
 import { detectStdinSource, readStdin } from './utils.js';
+import { addConversationCommands } from './conversation.js';
 
 interface CommentImportResponse {
   success?: boolean;
@@ -41,6 +42,7 @@ export function createCommentCommand(): Command {
   const comment = new Command('comment').description(
     'Add, retrieve, or resolve comments on a running difit server',
   );
+  addConversationCommands(comment);
 
   comment
     .command('add')
@@ -114,6 +116,7 @@ export function createCommentCommand(): Command {
   for (const action of ['resolve', 'reopen', 'delete'] as const) {
     const command = comment.command(action);
     if (action === 'delete') command.alias('remove');
+    else command.option('--review <reviewId>', 'review ID from a conversation event');
     command
       .description(
         {
@@ -124,7 +127,7 @@ export function createCommentCommand(): Command {
       )
       .argument('<threadIds...>', 'thread IDs')
       .requiredOption('--port <port>', 'port of the running difit server', parseInt)
-      .action(async (threadIds: string[], opts: { port: number }) => {
+      .action(async (threadIds: string[], opts: { port: number; review?: string }) => {
         try {
           const results = await Promise.all(
             threadIds.map(
@@ -144,6 +147,7 @@ export function createCommentCommand(): Command {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           resolved: action === 'resolve',
+                          reviewId: opts.review,
                         }),
                       },
                 );

@@ -113,6 +113,7 @@ export interface LegacyDiffComment {
 export type CommentIntent = 'comment' | 'question' | 'change';
 
 export interface DiffCommentMessage {
+  origin?: 'user' | 'agent';
   id: string;
   intent?: CommentIntent;
   body: string;

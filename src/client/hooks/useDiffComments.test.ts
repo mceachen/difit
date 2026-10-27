@@ -1,6 +1,8 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { Conversation } from '../../server/conversation';
+
 import type { DiffContextStorage } from '../../types/diff';
 import { useDiffComments } from './useDiffComments';
 
@@ -69,6 +71,38 @@ describe('useDiffComments', () => {
     act(() => result.current.toggleThreadResolved(thread.id));
     expect(result.current.threads[0]!.resolution?.resolved).toBe(false);
     expect(mockDiffContextData!.threads[0]!.messages).toEqual(thread.messages);
+  });
+
+  it('delivers a question toggle on an imported finding as a user revision', () => {
+    const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+    act(() => {
+      result.current.applyCommentImports(
+        [
+          {
+            type: 'thread',
+            id: 'finding',
+            filePath: 'a.ts',
+            position: { side: 'new', line: 1 },
+            body: 'Review finding',
+            author: 'Codex',
+          },
+        ],
+        'review-findings',
+      );
+    });
+    const importedThreads = result.current.threads;
+    expect(importedThreads[0]!.messages[0]!.origin).toBe('agent');
+    const selection = { baseCommitish: 'main', targetCommitish: 'feature' };
+    const journal = new Conversation();
+    journal.update(selection, [], importedThreads, 'agent');
+    const cursor = journal.cursor;
+
+    act(() => result.current.setThreadQuestion('finding', true));
+    journal.update(selection, importedThreads, result.current.threads, 'user');
+
+    expect(journal.read(cursor).events).toEqual([
+      expect.objectContaining({ type: 'comment.updated', origin: 'user', intent: 'question' }),
+    ]);
   });
 
   it.each(['review', 'line'] as const)(

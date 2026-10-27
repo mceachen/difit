@@ -28,6 +28,7 @@ import {
 import { getFileExtension } from '../utils/fileUtils.js';
 
 import { FileWatcherService } from './file-watcher.js';
+import { Conversation, registerConversationRoutes } from './conversation.js';
 import { GitDiffParser } from './git-diff.js';
 import { parseUserSettingsPatch, readUserConfig, updateUserClientSettings } from './user-config.js';
 
@@ -57,6 +58,7 @@ interface ServerOptions {
   openBrowser?: boolean;
   ignoreWhitespace?: boolean;
   clearComments?: boolean;
+  conversation?: boolean;
   commentImports?: CommentImport[];
   keepAlive?: boolean;
   diffMode?: DiffMode;
@@ -146,6 +148,7 @@ export async function startServer(
     hostname: hostname(),
   };
   const fileWatcher = new FileWatcherService();
+  const conversation = options.conversation ? new Conversation() : undefined;
   const generatedStatusCache = new Map<
     string,
     { value: GeneratedStatusResponse; expiresAt: number }
@@ -260,6 +263,7 @@ export async function startServer(
   const commentSessions = new Map<string, CommentSessionState>();
   const initialCommentThreads = mergeCommentImports([], initialCommentImports).threads;
   if (initialCommentThreads.length > 0) {
+    conversation?.update(currentCommentSelection, [], initialCommentThreads, 'agent');
     commentSessions.set(createCommentSessionKey(currentCommentSelection), {
       threads: initialCommentThreads,
       version: 1,
@@ -619,11 +623,11 @@ export async function startServer(
       return {
         id: thread.id,
         scope: 'review',
-        isQuestion: thread.isQuestion,
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt,
         messages: thread.messages,
         resolution: thread.resolution,
+        isQuestion: thread.isQuestion,
       };
     }
     if ('filePath' in thread && 'position' in thread) {
@@ -644,6 +648,7 @@ export async function startServer(
                 : `${threadId}:${index}`,
             body: message.body,
             author: message.author,
+            origin: message.origin,
             intent: message.intent,
             createdAt: message.createdAt || thread.createdAt || now,
             updatedAt: message.updatedAt || message.createdAt || thread.updatedAt || now,
@@ -651,7 +656,6 @@ export async function startServer(
         : [
             {
               id: threadId,
-              resolution: thread.resolution,
               body: '',
               createdAt: thread.createdAt || now,
               updatedAt: thread.updatedAt || thread.createdAt || now,
@@ -723,10 +727,12 @@ export async function startServer(
   function updateCommentSession(
     selection: DiffSelection,
     nextThreads: DiffCommentThread[],
+    origin: 'user' | 'agent' = 'user',
   ): boolean {
     const session = getOrCreateCommentSession(selection);
     const previous = JSON.stringify(session.threads);
     const next = JSON.stringify(nextThreads);
+    const previousThreads = session.threads;
     session.threads = nextThreads;
 
     if (previous === next) {
@@ -734,12 +740,19 @@ export async function startServer(
     }
 
     session.version += 1;
+    conversation?.update(selection, previousThreads, nextThreads, origin);
     fileWatcher.broadcast({
       type: 'commentsChanged',
       version: session.version,
       timestamp: new Date().toISOString(),
     });
     return true;
+  }
+
+  if (conversation) {
+    registerConversationRoutes(app, conversation, (selection, threads) => {
+      updateCommentSession(selection, threads, 'agent');
+    });
   }
 
   app.post('/api/comments', (req, res) => {
@@ -781,7 +794,7 @@ export async function startServer(
         .update(serializeCommentImports(commentImports))
         .digest('hex');
       const merged = mergeCommentImports(session.threads, commentImports);
-      const changed = updateCommentSession(selection, merged.threads);
+      const changed = updateCommentSession(selection, merged.threads, 'agent');
 
       res.json({
         success: true,
@@ -810,7 +823,14 @@ export async function startServer(
       res.status(400).json({ error: 'Expected resolved boolean and optional reviewId' });
       return;
     }
-    const selection = getCommentSelectionFromQuery(req.query as Record<string, unknown>);
+    const review =
+      typeof input.reviewId === 'string' ? conversation?.findReview(input.reviewId) : undefined;
+    if (input.reviewId !== undefined && !review) {
+      res.status(404).json({ error: 'Review not found' });
+      return;
+    }
+    const selection =
+      review?.selection ?? getCommentSelectionFromQuery(req.query as Record<string, unknown>);
     const session = getOrCreateCommentSession(selection);
     if (!session.threads.some((thread) => thread.id === req.params.threadId)) {
       res.status(404).json({ error: 'Thread not found' });

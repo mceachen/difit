@@ -85,6 +85,7 @@ interface CliOptions {
   comment: string[];
   pr?: string;
   clean?: boolean;
+  conversation?: boolean;
   includeUntracked?: boolean;
   keepAlive?: boolean;
   background?: boolean;
@@ -120,6 +121,8 @@ program
   )
   .option('--pr <url>', 'GitHub PR URL to review (e.g., https://github.com/owner/repo/pull/123)')
   .option('--clean', 'start with a clean slate by clearing all existing comments')
+  .option('--conversation', 'enable live comment events and exact-thread agent replies')
+  .option('--no-conversation', 'disable live comment events and agent replies')
   .option('--include-untracked', 'automatically include untracked files in diff')
   .option('--keep-alive', 'keep server running even after browser disconnects')
   .option('--background', 'keep the server running in the background and output JSON info')
@@ -233,6 +236,7 @@ program
           host: options.host,
           openBrowser: options.open,
           clearComments: options.clean,
+          conversation: options.conversation,
           keepAlive: options.keepAlive,
           ...(commentImports.length > 0 ? { commentImports } : {}),
         });
@@ -293,6 +297,7 @@ program
         host: options.host,
         openBrowser: options.open,
         clearComments: options.clean,
+        conversation: options.conversation,
         keepAlive: options.keepAlive,
         contextLines: options.context,
         diffMode: determineDiffMode(selection, compareWith),

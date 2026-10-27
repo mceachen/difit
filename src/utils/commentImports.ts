@@ -265,6 +265,7 @@ function createImportedThread(commentImport: ThreadCommentImport, now: string): 
         id: commentImport.id ?? threadId,
         body: commentImport.body,
         author: commentImport.author,
+        origin: 'agent',
         createdAt,
         updatedAt,
       },
@@ -279,6 +280,7 @@ function createImportedReply(commentImport: ReplyCommentImport, now: string): Di
     id: commentImport.id ?? createId(),
     body: commentImport.body,
     author: commentImport.author,
+    origin: 'agent',
     createdAt,
     updatedAt,
   };
@@ -320,6 +322,7 @@ function cloneMessage(message: DiffCommentMessage): DiffCommentMessage {
     id: message.id,
     body: message.body,
     author: message.author,
+    origin: message.origin,
     intent: message.intent,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,

@@ -62,3 +62,7 @@ pnpm run dev . --include-untracked
 ## Constraints
 
 Can only be used inside this Git-managed repository.
+
+## Live review conversations
+
+When the user requests live discussion, start difit with `--conversation --keep-alive` and keep its reported port and process handle. Watch comments with `difit comment watch --port <port> --once --wait 25000`, preserve the cursor and outstanding work, and answer exact review/thread/message IDs with `comment reply`. Reconcile expired cursors with `comment snapshot`; do not skip missed work. See `docs/agent-conversations.md` for the protocol.

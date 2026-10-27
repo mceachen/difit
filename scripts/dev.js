@@ -14,6 +14,7 @@ let viteProcess = null;
 let isShuttingDown = false;
 
 const cliStdoutProxy = createCliStdoutProxy({
+  showServerUrl: rawArgs.includes('--conversation'),
   onServerUrl: (cliServerUrl) => {
     if (viteProcess) {
       return;

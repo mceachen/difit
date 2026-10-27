@@ -3,11 +3,12 @@ const PORT_RETRY_PATTERN = /^Port \d+ is busy, trying \d+\.\.\.$/;
 
 /**
  * @param {{
+ *   showServerUrl?: boolean;
  *   onServerUrl: (serverUrl: string) => void;
  *   onOutput: (output: string) => void;
  * }} options
  */
-export function createCliStdoutProxy({ onServerUrl, onOutput }) {
+export function createCliStdoutProxy({ onServerUrl, onOutput, showServerUrl = false }) {
   let buffer = '';
   let pendingBlankLines = 0;
   /** @type {string | undefined} */
@@ -42,7 +43,7 @@ export function createCliStdoutProxy({ onServerUrl, onOutput }) {
 
     const shouldHidePortRetryLine = !detectedServerUrl && PORT_RETRY_PATTERN.test(line);
 
-    if (shouldHideServerUrlLine || shouldHidePortRetryLine) {
+    if ((shouldHideServerUrlLine && !showServerUrl) || shouldHidePortRetryLine) {
       pendingBlankLines = 0;
       return;
     }

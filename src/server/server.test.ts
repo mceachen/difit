@@ -9,6 +9,7 @@ process.env.VITEST_SERVER_TEST = 'true';
 
 import { startServer } from './server.js';
 import type { CommentImport, DiffCommentThread } from '../types/diff.js';
+import type { ConversationBatch } from '../types/conversation.js';
 
 // Add fetch polyfill for Node.js test environment
 const { fetch } = await import('undici');
@@ -1132,41 +1133,6 @@ describe('Server Integration Tests', () => {
       expect(threads).toHaveLength(1);
     });
 
-    it('resolves and reopens a thread while preserving messages', async () => {
-      await fetch(`http://localhost:${port}/api/comment-imports`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([
-          {
-            type: 'thread',
-            id: 'retained',
-            filePath: 'src/a.ts',
-            position: { side: 'new', line: 1 },
-            body: 'Keep this history',
-          },
-        ]),
-      });
-      for (const resolved of [true, false]) {
-        const response = await fetch(`http://localhost:${port}/api/comments/retained/resolution`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ resolved }),
-        });
-        expect(response.ok).toBe(true);
-        const snapshot = await fetch(`http://localhost:${port}/api/comments-json`);
-        const data = (await snapshot.json()) as {
-          threads: {
-            id: string;
-            resolution?: { resolved: boolean };
-            messages: { body: string }[];
-          }[];
-        };
-        const thread = data.threads.find((item) => item.id === 'retained');
-        expect(thread?.resolution?.resolved).toBe(resolved);
-        expect(thread?.messages[0]?.body).toBe('Keep this history');
-      }
-    });
-
     it('DELETE /api/comments/:threadId removes the thread and bumps the version', async () => {
       await fetch(`http://localhost:${port}/api/comment-imports`, {
         method: 'POST',
@@ -1841,6 +1807,326 @@ describe('Server Integration Tests', () => {
       const response2 = await fetch(`http://localhost:${port}/api/diff?ignoreWhitespace=true`);
       const data2 = (await response2.json()) as any;
       expect(data2.clearComments).toBe(true);
+    });
+  });
+  describe('Conversation API', () => {
+    it('streams general questions and resolves/reopens their exact review without deleting messages', async () => {
+      const { port, server } = await startServer({ conversation: true, keepAlive: true });
+      servers.push(server);
+      const origin = `http://localhost:${port}`;
+      const post = (path: string, body: unknown) =>
+        fetch(`${origin}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      const selection = '?base=review-base&target=review-target';
+      const thread = {
+        id: 'general',
+        scope: 'review',
+        createdAt: '2026-10-24T00:00:00Z',
+        updatedAt: '2026-10-24T00:00:00Z',
+        messages: [
+          {
+            id: 'question',
+            body: 'Why this approach?',
+            intent: 'question',
+            author: 'User',
+            createdAt: '2026-10-24T00:00:00Z',
+            updatedAt: '2026-10-24T00:00:00Z',
+          },
+        ],
+      };
+      expect((await post(`/api/comments${selection}`, { threads: [thread] })).status).toBe(200);
+      const batch = (await (
+        await fetch(`${origin}/api/conversation/events?wait=0`)
+      ).json()) as ConversationBatch;
+      const event = batch.events[0]!;
+      expect(event).toMatchObject({
+        scope: 'review',
+        intent: 'question',
+        body: 'Why this approach?',
+      });
+      expect(event).not.toHaveProperty('file');
+      expect(event).not.toHaveProperty('line');
+      expect(
+        (
+          await post('/api/conversation/reply', {
+            reviewId: event.reviewId,
+            threadId: event.threadId,
+            inReplyTo: event.messageId,
+            cursor: event.cursor,
+            body: 'Because it preserves history.',
+          })
+        ).status,
+      ).toBe(200);
+      // A different review has the same thread ID. Explicit review identity isolates resolution.
+      await post('/api/comments', { threads: [thread] });
+      for (const resolved of [true, false]) {
+        expect(
+          (await post('/api/comments/general/resolution', { reviewId: event.reviewId, resolved }))
+            .status,
+        ).toBe(200);
+        const saved = (await (await fetch(`${origin}/api/comments-json${selection}`)).json()) as {
+          threads: import('../types/diff.js').DiffCommentThread[];
+        };
+        expect(saved.threads[0]!.resolution?.resolved).toBe(resolved);
+        expect(saved.threads[0]!.messages).toHaveLength(2);
+        const other = (await (await fetch(`${origin}/api/comments-json`)).json()) as {
+          threads: import('../types/diff.js').DiffCommentThread[];
+        };
+        expect(other.threads[0]!.resolution).toBeUndefined();
+      }
+    });
+
+    it('delivers comments before approval and routes idempotent replies to the original review', async () => {
+      const { port, server } = await startServer({ conversation: true, keepAlive: true });
+      servers.push(server);
+      const origin = `http://localhost:${port}`;
+      const post = async (path: string, body: unknown) =>
+        fetch(`${origin}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      const selection = '?base=def4567&target=abc1234';
+      await post(`/api/comments${selection}`, {
+        comments: [
+          { id: 'question-a', file: 'a.ts', line: 4, body: 'Why?', codeContent: 'return 42;' },
+        ],
+      });
+      const initial = await fetch(`${origin}/api/conversation/events?wait=0`);
+      const batch = (await initial.json()) as ConversationBatch;
+      expect(batch.events).toHaveLength(1);
+      const event = batch.events[0]!;
+      expect(event).toMatchObject({
+        type: 'comment.created',
+        origin: 'user',
+        file: 'a.ts',
+        line: 4,
+        selection: { baseCommitish: 'def4567', targetCommitish: 'abc1234' },
+        codeSnapshot: { content: 'return 42;' },
+      });
+      expect(process.exit).not.toHaveBeenCalled();
+      // Another tab changes the server's current selection before the agent answers.
+      const parser = parserInstances.at(-1);
+      const diff = await parser.parseDiff();
+      parser.parseDiff.mockResolvedValue({
+        ...diff,
+        baseCommitish: 'other-base',
+        targetCommitish: 'other-target',
+      });
+      await fetch(`${origin}/api/diff?base=other-base&target=other-target`);
+      const reply = {
+        reviewId: event.reviewId,
+        threadId: event.threadId,
+        inReplyTo: event.messageId,
+        body: 'Because…',
+        author: 'Codex',
+      };
+      expect((await post('/api/conversation/reply', reply)).status).toBe(200);
+      expect((await post('/api/conversation/reply', reply)).status).toBe(200);
+      const saved = (await (await fetch(`${origin}/api/comments-json${selection}`)).json()) as {
+        threads: { messages: { body: string }[] }[];
+      };
+      expect(saved.threads[0]!.messages.map((message) => message.body)).toEqual([
+        'Why?',
+        'Because…',
+      ]);
+      const other = (await (await fetch(`${origin}/api/comments-json`)).json()) as {
+        threads: unknown[];
+      };
+      expect(other.threads).toEqual([]);
+      const events = (await (
+        await fetch(`${origin}/api/conversation/events?wait=0&after=${batch.cursor}`)
+      ).json()) as ConversationBatch;
+      expect(events.events).toHaveLength(1);
+      expect(events.events[0]).toMatchObject({
+        origin: 'agent',
+        body: 'Because…',
+        reviewId: event.reviewId,
+      });
+      expect(
+        (await post('/api/conversation/reply', { ...reply, inReplyTo: 'missing' })).status,
+      ).toBe(404);
+      await fetch(`${origin}/api/comments/${event.threadId}${selection}`, { method: 'DELETE' });
+      expect((await post('/api/conversation/reply', reply)).status).toBe(404);
+    });
+
+    // Browser restoration must preserve agent origin through the real HTTP API.
+    // Run: pnpm test src/server/server.test.ts -t 'restores persisted message origins'
+    it('restores persisted message origins after restarting a review', async () => {
+      const first = await startServer({ conversation: true });
+      const second = await startServer({ conversation: true });
+      servers.push(first.server, second.server);
+      const post = (port: number, path: string, body: unknown) =>
+        fetch(`http://localhost:${port}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      await post(first.port, '/api/comments', {
+        comments: [{ id: 'q', file: 'a.ts', line: 1, body: 'Why?' }],
+      });
+      const batch = (await (
+        await fetch(`http://localhost:${first.port}/api/conversation/events?wait=0`)
+      ).json()) as ConversationBatch;
+      const event = batch.events[0]!;
+      await post(first.port, '/api/conversation/reply', {
+        reviewId: event.reviewId,
+        threadId: event.threadId,
+        inReplyTo: event.messageId,
+        body: 'Because.',
+        author: 'Codex',
+      });
+      const saved: unknown = await (
+        await fetch(`http://localhost:${first.port}/api/comments-json`)
+      ).json();
+      await post(second.port, '/api/comments', saved);
+      const restored = (await (
+        await fetch(`http://localhost:${second.port}/api/conversation/events?wait=0`)
+      ).json()) as ConversationBatch;
+      expect(restored.events.map(({ body, origin }) => ({ body, origin }))).toEqual([
+        { body: 'Why?', origin: 'user' },
+        { body: 'Because.', origin: 'agent' },
+      ]);
+    });
+
+    it('preserves preloaded and imported agent messages through browser restoration', async () => {
+      const first = await startServer({
+        conversation: true,
+        commentImports: [
+          {
+            type: 'thread',
+            id: 'finding',
+            filePath: 'a.ts',
+            position: { side: 'new', line: 1 },
+            body: 'Finding.',
+          },
+        ],
+      });
+      const second = await startServer({ conversation: true });
+      servers.push(first.server, second.server);
+      const origin = `http://localhost:${first.port}`;
+      const snapshot = (await (await fetch(`${origin}/api/conversation/snapshot`)).json()) as {
+        reviews: { threads: { messages: { body: string }[] }[] }[];
+      };
+      expect(snapshot.reviews[0]?.threads[0]?.messages[0]?.body).toBe('Finding.');
+      await fetch(`${origin}/api/comment-imports`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([
+          {
+            type: 'reply',
+            filePath: 'a.ts',
+            position: { side: 'new', line: 1 },
+            body: 'Imported reply.',
+          },
+        ]),
+      });
+      const saved: unknown = await (await fetch(`${origin}/api/comments-json`)).json();
+      await fetch(`http://localhost:${second.port}/api/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(saved),
+      });
+      const restored = (await (
+        await fetch(`http://localhost:${second.port}/api/conversation/events?wait=0`)
+      ).json()) as ConversationBatch;
+      expect(restored.events.map(({ body, origin }) => ({ body, origin }))).toEqual([
+        { body: 'Finding.', origin: 'agent' },
+        { body: 'Imported reply.', origin: 'agent' },
+      ]);
+    });
+
+    // Recovery must expose IDs for every outstanding review and an atomic cursor.
+    // Run: pnpm test src/server/server.test.ts -t 'recovers expired reviews'
+    it('recovers expired reviews with reply identities and a gap-free cursor', async () => {
+      const { port, server } = await startServer({ conversation: true });
+      servers.push(server);
+      const origin = `http://localhost:${port}`;
+      const post = (path: string, body: unknown) =>
+        fetch(`${origin}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      await post('/api/comments?base=base-b&target=target-b', {
+        comments: [{ id: 'q-b', file: 'b.ts', line: 1, body: 'Outstanding?' }],
+      });
+      await post('/api/comments?base=base-a&target=target-a', {
+        comments: Array.from({ length: 256 }, (_, i) => ({
+          id: `q-${i}`,
+          file: 'a.ts',
+          line: 1,
+          body: `Question ${i}`,
+        })),
+      });
+      expect((await fetch(`${origin}/api/conversation/events?wait=0`)).status).toBe(409);
+      const response = await fetch(`${origin}/api/conversation/snapshot`);
+      expect(response.status).toBe(200);
+      const snapshot = (await response.json()) as {
+        cursor: string;
+        reviews: {
+          id: string;
+          selection: { targetCommitish: string };
+          threads: { id: string; messages: { id: string }[] }[];
+        }[];
+      };
+      const review = snapshot.reviews.find((r) => r.selection.targetCommitish === 'target-b')!;
+      const thread = review.threads[0]!;
+      expect(
+        (
+          await post('/api/conversation/reply', {
+            reviewId: review.id,
+            threadId: thread.id,
+            inReplyTo: thread.messages[0]!.id,
+            body: 'Recovered.',
+          })
+        ).status,
+      ).toBe(200);
+      const resumed = (await (
+        await fetch(`${origin}/api/conversation/events?wait=0&after=${snapshot.cursor}`)
+      ).json()) as ConversationBatch;
+      expect(resumed.events).toHaveLength(1);
+      expect(resumed.events[0]).toMatchObject({
+        body: 'Recovered.',
+        origin: 'agent',
+        reviewId: review.id,
+      });
+    });
+
+    it('requires opt-in and validates conversation requests', async () => {
+      const disabled = await startServer({});
+      servers.push(disabled.server);
+      expect(
+        (await fetch(`http://localhost:${disabled.port}/api/conversation/events?wait=0`)).status,
+      ).toBe(404);
+      const enabled = await startServer({ conversation: true });
+      servers.push(enabled.server);
+      const origin = `http://localhost:${enabled.port}`;
+      expect((await fetch(`${origin}/api/conversation/events?wait=25001`)).status).toBe(400);
+      expect((await fetch(`${origin}/api/conversation/events?after=invalid&wait=0`)).status).toBe(
+        409,
+      );
+      expect(
+        (
+          await fetch(`${origin}/api/conversation/reply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: '{}',
+          })
+        ).status,
+      ).toBe(415);
+      expect(
+        (
+          await fetch(`${origin}/api/conversation/reply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+          })
+        ).status,
+      ).toBe(400);
     });
   });
 });

@@ -378,6 +378,7 @@ export function useDiffComments(
                   index === 0
                     ? {
                         ...message,
+                        origin: 'user',
                         intent: isQuestion
                           ? 'question'
                           : message.intent === 'question'

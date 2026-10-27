@@ -53,6 +53,20 @@ describe('createCommentCommand', () => {
   describe('resolve subcommand', () => {
     const resolveCommand = command.commands.find((c) => c.name() === 'resolve')!;
 
+    it('only offers review selection for commands that support it', () => {
+      expect(
+        command.commands
+          .find((c) => c.name() === 'delete')!
+          .options.some((o) => o.long === '--review'),
+      ).toBe(false);
+      expect(resolveCommand.options.some((o) => o.long === '--review')).toBe(true);
+      expect(
+        command.commands
+          .find((c) => c.name() === 'reopen')!
+          .options.some((o) => o.long === '--review'),
+      ).toBe(true);
+    });
+
     it('reserves "remove" as an alias for deletion', () => {
       expect(command.commands.find((c) => c.name() === 'delete')!.aliases()).toContain('remove');
     });
@@ -262,6 +276,32 @@ describe('comment subcommand integration', () => {
       expect(process.exit).not.toHaveBeenCalled();
     });
 
+    it('reopens the explicitly selected review without deleting messages', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ success: true }));
+      await createCommentCommand().parseAsync([
+        'node',
+        'difit',
+        'reopen',
+        '--port',
+        '4966',
+        '--review',
+        'review-2',
+        'thread-1',
+      ]);
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:4966/api/comments/thread-1/resolution',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolved: false, reviewId: 'review-2' }),
+        },
+      );
+      expect(JSON.parse(consoleOutput[0]!)).toMatchObject({
+        success: true,
+        reopened: ['thread-1'],
+      });
+    });
+
     it('works via the remove alias', async () => {
       mockFetch.mockResolvedValue(jsonResponse({ success: true, threadId: 'abc123', version: 2 }));
 
@@ -293,6 +333,27 @@ describe('comment subcommand integration', () => {
           body: JSON.stringify({ resolved: true }),
         },
       );
+    });
+
+    it('reports an expired review as an error instead of a deleted thread', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ error: 'Review not found' }, 404));
+      await createCommentCommand().parseAsync([
+        'node',
+        'difit',
+        'resolve',
+        '--port',
+        '4966',
+        '--review',
+        'expired',
+        'thread-1',
+      ]);
+      expect(JSON.parse(consoleOutput[0]!)).toEqual({
+        success: false,
+        resolved: [],
+        notFound: [],
+        errors: [{ threadId: 'thread-1', error: 'Review not found' }],
+      });
+      expect(process.exit).toHaveBeenCalledWith(1);
     });
 
     it('reports unknown thread IDs and exits with an error', async () => {

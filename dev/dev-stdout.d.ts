@@ -4,6 +4,7 @@ export interface CliStdoutProxy {
 }
 
 export interface CreateCliStdoutProxyOptions {
+  showServerUrl?: boolean;
   onServerUrl: (serverUrl: string) => void;
   onOutput: (output: string) => void;
 }

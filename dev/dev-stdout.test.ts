@@ -77,4 +77,17 @@ describe('createCliStdoutProxy', () => {
       '🚀 difit server started on http://localhost:4966\n',
     ]);
   });
+  it('reports the actual API URL in conversation mode after a port retry', () => {
+    const output: string[] = [];
+    const onServerUrl = vi.fn();
+    const proxy = createCliStdoutProxy({
+      showServerUrl: true,
+      onServerUrl,
+      onOutput: (text: string) => output.push(text),
+    });
+    proxy.push('Port 4966 is busy, trying 4967...\n');
+    proxy.push('🚀 difit server started on http://localhost:4967\n');
+    expect(onServerUrl).toHaveBeenCalledWith('http://localhost:4967');
+    expect(output.join('')).toContain('http://localhost:4967');
+  });
 });

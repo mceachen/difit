@@ -278,3 +278,9 @@ pnpm run format
 ## 📄 라이선스
 
 MIT
+
+## Live agent conversations
+
+Use `--conversation --keep-alive` to stream saved comments to a watching agent and
+receive replies in their original discussions. This is opt-in and does not start an
+agent automatically. See [the conversation protocol](docs/agent-conversations.md).
