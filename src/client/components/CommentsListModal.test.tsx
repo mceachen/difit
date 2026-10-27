@@ -81,7 +81,7 @@ describe('CommentsListModal', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sends general comments alongside inline discussions without navigating', async () => {
+  it('sends a general question and filters resolved conversations without navigating', async () => {
     const user = userEvent.setup();
     const onAddGeneralComment = vi.fn();
     const onNavigate = vi.fn();
@@ -91,6 +91,7 @@ describe('CommentsListModal', () => {
       scope: 'review',
       createdAt: '2024-01-01',
       updatedAt: '2024-01-02',
+      resolution: { resolved: true, updatedAt: '2024-01-02' },
       messages: [
         {
           id: 'general-msg',
@@ -107,7 +108,8 @@ describe('CommentsListModal', () => {
         onClose={onClose}
         onNavigate={onNavigate}
         comments={[...mockThreads, general]}
-        onRemoveThread={mockRemoveThread}
+        onToggleThreadResolved={mockRemoveThread}
+        onRemoveThread={vi.fn()}
         onGenerateThreadPrompt={mockGenerateThreadPrompt}
         onReplyToThread={mockReplyToThread}
         onRemoveMessage={mockRemoveMessage}
@@ -121,11 +123,23 @@ describe('CommentsListModal', () => {
       'How does this work?',
     );
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(onAddGeneralComment).toHaveBeenCalledWith('How does this work?', { isQuestion: false });
-    expect(screen.getByText('First root comment')).toBeInTheDocument();
+    expect(onAddGeneralComment).toHaveBeenCalledWith('How does this work?', {
+      isQuestion: false,
+    });
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Conversation filter' }),
+      'resolved',
+    );
+    expect(screen.queryByText('First root comment')).not.toBeInTheDocument();
     await user.click(screen.getByText('Review conversation'));
     expect(onNavigate).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Reopen' }));
+    expect(mockRemoveThread).toHaveBeenCalledWith('general');
+    expect(onClose).not.toHaveBeenCalled();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Conversation filter' }), 'open');
+    expect(screen.getByText('First root comment')).toBeInTheDocument();
+    expect(screen.queryByText('Review conversation')).not.toBeInTheDocument();
   });
 
   it('does not render when closed', () => {
@@ -135,7 +149,7 @@ describe('CommentsListModal', () => {
         onClose={vi.fn()}
         onNavigate={vi.fn()}
         comments={mockThreads}
-        onRemoveThread={mockRemoveThread}
+        onToggleThreadResolved={mockRemoveThread}
         onGenerateThreadPrompt={mockGenerateThreadPrompt}
         onReplyToThread={mockReplyToThread}
         onRemoveMessage={mockRemoveMessage}
@@ -154,7 +168,7 @@ describe('CommentsListModal', () => {
         onClose={vi.fn()}
         onNavigate={vi.fn()}
         comments={mockThreads}
-        onRemoveThread={mockRemoveThread}
+        onToggleThreadResolved={mockRemoveThread}
         onGenerateThreadPrompt={mockGenerateThreadPrompt}
         onReplyToThread={mockReplyToThread}
         onRemoveMessage={mockRemoveMessage}
@@ -179,7 +193,7 @@ describe('CommentsListModal', () => {
         onNavigate={vi.fn()}
         comments={mockThreads}
         showAuthorBadges={true}
-        onRemoveThread={mockRemoveThread}
+        onToggleThreadResolved={mockRemoveThread}
         onGenerateThreadPrompt={mockGenerateThreadPrompt}
         onReplyToThread={mockReplyToThread}
         onRemoveMessage={mockRemoveMessage}
@@ -202,7 +216,7 @@ describe('CommentsListModal', () => {
         onClose={onClose}
         onNavigate={onNavigate}
         comments={mockThreads}
-        onRemoveThread={mockRemoveThread}
+        onToggleThreadResolved={mockRemoveThread}
         onGenerateThreadPrompt={mockGenerateThreadPrompt}
         onReplyToThread={mockReplyToThread}
         onRemoveMessage={mockRemoveMessage}
@@ -228,7 +242,7 @@ describe('CommentsListModal', () => {
         onClose={onClose}
         onNavigate={onNavigate}
         comments={mockThreads}
-        onRemoveThread={mockRemoveThread}
+        onToggleThreadResolved={mockRemoveThread}
         onGenerateThreadPrompt={mockGenerateThreadPrompt}
         onReplyToThread={mockReplyToThread}
         onRemoveMessage={mockRemoveMessage}
@@ -256,7 +270,7 @@ describe('CommentsListModal', () => {
         onClose={onClose}
         onNavigate={onNavigate}
         comments={mockThreads}
-        onRemoveThread={mockRemoveThread}
+        onToggleThreadResolved={mockRemoveThread}
         onGenerateThreadPrompt={mockGenerateThreadPrompt}
         onReplyToThread={mockReplyToThread}
         onRemoveMessage={mockRemoveMessage}
@@ -266,7 +280,7 @@ describe('CommentsListModal', () => {
     );
 
     await user.click(screen.getAllByTitle('Edit message')[0]!);
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.keyboard('{Escape}');
 
     expect(screen.getByText('First root comment')).toBeInTheDocument();
     expect(onNavigate).not.toHaveBeenCalled();
@@ -284,7 +298,7 @@ describe('CommentsListModal', () => {
         onClose={vi.fn()}
         onNavigate={vi.fn()}
         comments={mockThreads}
-        onRemoveThread={mockRemoveThread}
+        onToggleThreadResolved={mockRemoveThread}
         onGenerateThreadPrompt={mockGenerateThreadPrompt}
         onReplyToThread={mockReplyToThread}
         onRemoveMessage={mockRemoveMessage}
@@ -308,7 +322,7 @@ describe('CommentsListModal', () => {
         onClose={vi.fn()}
         onNavigate={vi.fn()}
         comments={[]}
-        onRemoveThread={mockRemoveThread}
+        onToggleThreadResolved={mockRemoveThread}
         onGenerateThreadPrompt={mockGenerateThreadPrompt}
         onReplyToThread={mockReplyToThread}
         onRemoveMessage={mockRemoveMessage}

@@ -1132,6 +1132,41 @@ describe('Server Integration Tests', () => {
       expect(threads).toHaveLength(1);
     });
 
+    it('resolves and reopens a thread while preserving messages', async () => {
+      await fetch(`http://localhost:${port}/api/comment-imports`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([
+          {
+            type: 'thread',
+            id: 'retained',
+            filePath: 'src/a.ts',
+            position: { side: 'new', line: 1 },
+            body: 'Keep this history',
+          },
+        ]),
+      });
+      for (const resolved of [true, false]) {
+        const response = await fetch(`http://localhost:${port}/api/comments/retained/resolution`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolved }),
+        });
+        expect(response.ok).toBe(true);
+        const snapshot = await fetch(`http://localhost:${port}/api/comments-json`);
+        const data = (await snapshot.json()) as {
+          threads: {
+            id: string;
+            resolution?: { resolved: boolean };
+            messages: { body: string }[];
+          }[];
+        };
+        const thread = data.threads.find((item) => item.id === 'retained');
+        expect(thread?.resolution?.resolved).toBe(resolved);
+        expect(thread?.messages[0]?.body).toBe('Keep this history');
+      }
+    });
+
     it('DELETE /api/comments/:threadId removes the thread and bumps the version', async () => {
       await fetch(`http://localhost:${port}/api/comment-imports`, {
         method: 'POST',

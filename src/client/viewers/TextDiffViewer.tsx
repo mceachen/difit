@@ -19,6 +19,7 @@ export function TextDiffViewer({
   expandAllBetweenChunks,
   onAddComment,
   onGenerateThreadPrompt,
+  onToggleThreadResolved,
   onRemoveThread,
   onReplyToThread,
   onRemoveMessage,
@@ -106,6 +107,7 @@ export function TextDiffViewer({
                 showAuthorBadges={showAuthorBadges}
                 onAddComment={onAddComment}
                 onGenerateThreadPrompt={onGenerateThreadPrompt}
+                onToggleThreadResolved={onToggleThreadResolved}
                 onRemoveThread={onRemoveThread}
                 onReplyToThread={onReplyToThread}
                 onRemoveMessage={onRemoveMessage}

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -33,12 +33,77 @@ const mockThread: CommentThread = {
 };
 
 describe('CommentThreadCard', () => {
+  it('resolves without invoking the explicit deletion callback', async () => {
+    const user = userEvent.setup();
+    const onToggleThreadResolved = vi.fn();
+    const onRemoveThread = vi.fn();
+    render(
+      <CommentThreadCard
+        thread={mockThread}
+        onGeneratePrompt={() => ''}
+        onToggleThreadResolved={onToggleThreadResolved}
+        onRemoveThread={onRemoveThread}
+        onReplyToThread={vi.fn()}
+        onRemoveMessage={vi.fn()}
+        onUpdateMessage={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Resolve thread' }));
+    await user.click(screen.getByRole('button', { name: 'Resolve' }));
+    expect(onToggleThreadResolved).toHaveBeenCalledWith('thread-1');
+    expect(onRemoveThread).not.toHaveBeenCalled();
+  });
+  it('keeps a resolved general conversation available to reopen', async () => {
+    const user = userEvent.setup();
+    const onToggleThreadResolved = vi.fn();
+    render(
+      <CommentThreadCard
+        thread={{
+          id: 'general',
+          scope: 'review',
+          createdAt: mockThread.createdAt,
+          updatedAt: mockThread.updatedAt,
+          messages: mockThread.messages,
+          resolution: { resolved: true, updatedAt: mockThread.updatedAt },
+        }}
+        onGeneratePrompt={() => ''}
+        onToggleThreadResolved={onToggleThreadResolved}
+        onReplyToThread={vi.fn()}
+        onRemoveMessage={vi.fn()}
+        onUpdateMessage={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Review conversation')).toBeInTheDocument();
+    expect(screen.getByText('Resolved')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reopen' }));
+    expect(onToggleThreadResolved).toHaveBeenCalledWith('general');
+  });
+  it('labels the expanded resolved inline confirmation Reopen', async () => {
+    const user = userEvent.setup();
+    const onToggleThreadResolved = vi.fn();
+    render(
+      <CommentThreadCard
+        thread={{ ...mockThread, resolution: { resolved: true, updatedAt: mockThread.updatedAt } }}
+        onGeneratePrompt={() => ''}
+        onToggleThreadResolved={onToggleThreadResolved}
+        onReplyToThread={vi.fn()}
+        onRemoveMessage={vi.fn()}
+        onUpdateMessage={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Expand thread' }));
+    await user.click(screen.getByTitle('Reopen thread'));
+    const confirmation = screen.getByText('Reopen?').parentElement!;
+    await user.click(within(confirmation).getByRole('button', { name: 'Reopen' }));
+    expect(onToggleThreadResolved).toHaveBeenCalledWith('thread-1');
+  });
+
   it('does not show delete action for replies authored by someone else', () => {
     render(
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -62,7 +127,7 @@ describe('CommentThreadCard', () => {
           ],
         }}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -75,13 +140,13 @@ describe('CommentThreadCard', () => {
 
   it('shows an inline confirmation before resolving a root comment by default', async () => {
     const user = userEvent.setup();
-    const onRemoveThread = vi.fn();
+    const onToggleThreadResolved = vi.fn();
 
     render(
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={onRemoveThread}
+        onToggleThreadResolved={onToggleThreadResolved}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -90,23 +155,23 @@ describe('CommentThreadCard', () => {
 
     await user.click(screen.getByTitle('Resolve thread'));
 
-    expect(onRemoveThread).not.toHaveBeenCalled();
+    expect(onToggleThreadResolved).not.toHaveBeenCalled();
     expect(screen.getByText('Resolve?')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Resolve' }));
 
-    expect(onRemoveThread).toHaveBeenCalledWith('thread-1');
+    expect(onToggleThreadResolved).toHaveBeenCalledWith('thread-1');
   });
 
   it('cancels the inline resolve confirmation with the cancel button', async () => {
     const user = userEvent.setup();
-    const onRemoveThread = vi.fn();
+    const onToggleThreadResolved = vi.fn();
 
     render(
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={onRemoveThread}
+        onToggleThreadResolved={onToggleThreadResolved}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -116,20 +181,20 @@ describe('CommentThreadCard', () => {
     await user.click(screen.getByTitle('Resolve thread'));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    expect(onRemoveThread).not.toHaveBeenCalled();
+    expect(onToggleThreadResolved).not.toHaveBeenCalled();
     expect(screen.queryByText('Resolve?')).not.toBeInTheDocument();
     expect(screen.getByTitle('Resolve thread')).toBeInTheDocument();
   });
 
   it('cancels the inline resolve confirmation with Escape', async () => {
     const user = userEvent.setup();
-    const onRemoveThread = vi.fn();
+    const onToggleThreadResolved = vi.fn();
 
     render(
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={onRemoveThread}
+        onToggleThreadResolved={onToggleThreadResolved}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -139,7 +204,7 @@ describe('CommentThreadCard', () => {
     await user.click(screen.getByTitle('Resolve thread'));
     await user.keyboard('{Escape}');
 
-    expect(onRemoveThread).not.toHaveBeenCalled();
+    expect(onToggleThreadResolved).not.toHaveBeenCalled();
     expect(screen.queryByText('Resolve?')).not.toBeInTheDocument();
   });
 
@@ -153,7 +218,7 @@ describe('CommentThreadCard', () => {
         <CommentThreadCard
           thread={mockThread}
           onGeneratePrompt={() => 'thread prompt'}
-          onRemoveThread={vi.fn()}
+          onToggleThreadResolved={vi.fn()}
           onReplyToThread={vi.fn().mockResolvedValue(undefined)}
           onRemoveMessage={vi.fn()}
           onUpdateMessage={vi.fn()}
@@ -172,7 +237,7 @@ describe('CommentThreadCard', () => {
 
   it('cancels the inline resolve confirmation when clicking outside', async () => {
     const user = userEvent.setup();
-    const onRemoveThread = vi.fn();
+    const onToggleThreadResolved = vi.fn();
 
     render(
       <div>
@@ -180,7 +245,7 @@ describe('CommentThreadCard', () => {
         <CommentThreadCard
           thread={mockThread}
           onGeneratePrompt={() => 'thread prompt'}
-          onRemoveThread={onRemoveThread}
+          onToggleThreadResolved={onToggleThreadResolved}
           onReplyToThread={vi.fn().mockResolvedValue(undefined)}
           onRemoveMessage={vi.fn()}
           onUpdateMessage={vi.fn()}
@@ -191,20 +256,20 @@ describe('CommentThreadCard', () => {
     await user.click(screen.getByTitle('Resolve thread'));
     await user.click(screen.getByRole('button', { name: 'outside' }));
 
-    expect(onRemoveThread).not.toHaveBeenCalled();
+    expect(onToggleThreadResolved).not.toHaveBeenCalled();
     expect(screen.queryByText('Resolve?')).not.toBeInTheDocument();
   });
 
   it('resolves immediately without confirmation when confirmRootAction is false', async () => {
     const user = userEvent.setup();
-    const onRemoveThread = vi.fn();
+    const onToggleThreadResolved = vi.fn();
 
     render(
       <CommentThreadCard
         thread={mockThread}
         confirmRootAction={false}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={onRemoveThread}
+        onToggleThreadResolved={onToggleThreadResolved}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -214,7 +279,7 @@ describe('CommentThreadCard', () => {
     await user.click(screen.getByTitle('Resolve thread'));
 
     expect(screen.queryByText('Resolve?')).not.toBeInTheDocument();
-    expect(onRemoveThread).toHaveBeenCalledWith('thread-1');
+    expect(onToggleThreadResolved).toHaveBeenCalledWith('thread-1');
   });
 
   it('collapses the thread into a single line and expands it back', async () => {
@@ -224,7 +289,7 @@ describe('CommentThreadCard', () => {
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -253,7 +318,7 @@ describe('CommentThreadCard', () => {
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -274,7 +339,7 @@ describe('CommentThreadCard', () => {
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -292,7 +357,7 @@ describe('CommentThreadCard', () => {
       <CommentThreadCard
         thread={{ ...mockThread, isOutdated: true }}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -310,7 +375,7 @@ describe('CommentThreadCard', () => {
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -325,7 +390,7 @@ describe('CommentThreadCard', () => {
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -343,7 +408,7 @@ describe('CommentThreadCard', () => {
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={onReplyToThread}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -356,21 +421,21 @@ describe('CommentThreadCard', () => {
     expect(textarea).toHaveFocus();
 
     await user.type(textarea, 'A new reply');
-    await user.click(screen.getByRole('button', { name: 'Reply' }));
+    await user.click(screen.getByRole('button', { name: 'Send' }));
 
     expect(onReplyToThread).toHaveBeenCalledWith('thread-1', 'A new reply');
     // Collapses back to the trigger after submitting
     expect(screen.getByRole('button', { name: 'Write a reply...' })).toBeInTheDocument();
   });
 
-  it('collapses the reply form back to the trigger on cancel', async () => {
+  it('collapses the reply form back to the trigger on Escape', async () => {
     const user = userEvent.setup();
 
     render(
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
         onUpdateMessage={vi.fn()}
@@ -378,7 +443,7 @@ describe('CommentThreadCard', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Write a reply...' }));
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.keyboard('{Escape}');
 
     expect(screen.queryByPlaceholderText('Write a reply...')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Write a reply...' })).toBeInTheDocument();
@@ -401,7 +466,7 @@ describe('CommentThreadCard', () => {
           ],
         }}
         onGeneratePrompt={() => 'thread prompt'}
-        onRemoveThread={vi.fn()}
+        onToggleThreadResolved={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={onRemoveMessage}
         onUpdateMessage={vi.fn()}
@@ -421,11 +486,13 @@ describe('CommentThreadCard', () => {
   it('deletes the root thread after an inline delete confirmation', async () => {
     const user = userEvent.setup();
     const onRemoveThread = vi.fn();
+    const onToggleThreadResolved = vi.fn();
 
     render(
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
+        onToggleThreadResolved={onToggleThreadResolved}
         onRemoveThread={onRemoveThread}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
@@ -441,6 +508,7 @@ describe('CommentThreadCard', () => {
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     expect(onRemoveThread).toHaveBeenCalledWith('thread-1');
+    expect(onToggleThreadResolved).not.toHaveBeenCalled();
   });
 
   it('toggles a thread between a comment and a question', async () => {
@@ -451,6 +519,7 @@ describe('CommentThreadCard', () => {
       <CommentThreadCard
         thread={mockThread}
         onGeneratePrompt={() => 'thread prompt'}
+        onToggleThreadResolved={vi.fn()}
         onRemoveThread={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}
@@ -467,6 +536,7 @@ describe('CommentThreadCard', () => {
       <CommentThreadCard
         thread={{ ...mockThread, isQuestion: true }}
         onGeneratePrompt={() => 'thread prompt'}
+        onToggleThreadResolved={vi.fn()}
         onRemoveThread={vi.fn()}
         onReplyToThread={vi.fn().mockResolvedValue(undefined)}
         onRemoveMessage={vi.fn()}

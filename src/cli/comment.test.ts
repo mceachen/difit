@@ -53,8 +53,8 @@ describe('createCommentCommand', () => {
   describe('resolve subcommand', () => {
     const resolveCommand = command.commands.find((c) => c.name() === 'resolve')!;
 
-    it('has "remove" alias', () => {
-      expect(resolveCommand.aliases()).toContain('remove');
+    it('reserves "remove" as an alias for deletion', () => {
+      expect(command.commands.find((c) => c.name() === 'delete')!.aliases()).toContain('remove');
     });
 
     it('requires --port option', () => {
@@ -229,18 +229,28 @@ describe('comment subcommand integration', () => {
   });
 
   describe('resolve', () => {
-    it('sends DELETE requests for each thread ID', async () => {
+    it('preserves threads with resolution requests for each ID', async () => {
       mockFetch.mockResolvedValue(jsonResponse({ success: true, threadId: 'abc123', version: 2 }));
 
       const command = createCommentCommand();
       await command.parseAsync(['node', 'difit', 'resolve', '--port', '4966', 'abc123', 'def456']);
 
-      expect(mockFetch).toHaveBeenCalledWith('http://localhost:4966/api/comments/abc123', {
-        method: 'DELETE',
-      });
-      expect(mockFetch).toHaveBeenCalledWith('http://localhost:4966/api/comments/def456', {
-        method: 'DELETE',
-      });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:4966/api/comments/abc123/resolution',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolved: true }),
+        },
+      );
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:4966/api/comments/def456/resolution',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolved: true }),
+        },
+      );
       expect(consoleOutput[0]).toBe(
         JSON.stringify({
           success: true,
@@ -261,7 +271,12 @@ describe('comment subcommand integration', () => {
       expect(mockFetch).toHaveBeenCalledWith('http://localhost:4966/api/comments/abc123', {
         method: 'DELETE',
       });
-      expect(consoleOutput[0]).toContain('"success":true');
+      expect(JSON.parse(consoleOutput[0]!)).toEqual({
+        success: true,
+        deleted: ['abc123'],
+        notFound: [],
+        errors: [],
+      });
     });
 
     it('URL-encodes thread IDs', async () => {
@@ -270,9 +285,14 @@ describe('comment subcommand integration', () => {
       const command = createCommentCommand();
       await command.parseAsync(['node', 'difit', 'resolve', '--port', '4966', 'a/b c']);
 
-      expect(mockFetch).toHaveBeenCalledWith('http://localhost:4966/api/comments/a%2Fb%20c', {
-        method: 'DELETE',
-      });
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:4966/api/comments/a%2Fb%20c/resolution',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolved: true }),
+        },
+      );
     });
 
     it('reports unknown thread IDs and exits with an error', async () => {

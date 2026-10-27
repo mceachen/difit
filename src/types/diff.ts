@@ -129,6 +129,7 @@ interface CommentThreadBase {
   // Marks the thread as a question the AI should answer rather than act on
   isQuestion?: boolean;
 
+  resolution?: { resolved: boolean; updatedAt: string };
   messages: DiffCommentMessage[];
 }
 
@@ -209,6 +210,7 @@ interface DisplayCommentThreadBase {
   codeContent?: string;
   isOutdated?: boolean;
   isQuestion?: boolean;
+  resolution?: { resolved: boolean; updatedAt: string };
   messages: DiffCommentMessage[];
 }
 

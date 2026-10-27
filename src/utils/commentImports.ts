@@ -326,10 +326,14 @@ function cloneMessage(message: DiffCommentMessage): DiffCommentMessage {
 }
 
 function cloneThread(thread: DiffCommentThread): DiffCommentThread {
-  if (thread.scope === 'review') {
-    return { ...thread, messages: thread.messages.map(cloneMessage) };
-  }
+  if (thread.scope === 'review')
+    return {
+      ...thread,
+      messages: thread.messages.map(cloneMessage),
+      resolution: thread.resolution ? { ...thread.resolution } : undefined,
+    };
   return {
+    resolution: thread.resolution ? { ...thread.resolution } : undefined,
     id: thread.id,
     filePath: thread.filePath,
     createdAt: thread.createdAt,
@@ -426,6 +430,12 @@ function mergeThread(
         ? existingThread.createdAt
         : incomingThread.createdAt,
     updatedAt,
+    resolution:
+      !existingThread.resolution ||
+      (incomingThread.resolution &&
+        incomingThread.resolution.updatedAt >= existingThread.resolution.updatedAt)
+        ? incomingThread.resolution
+        : existingThread.resolution,
     isQuestion:
       incomingThread.updatedAt.localeCompare(existingThread.updatedAt) >= 0
         ? incomingThread.isQuestion

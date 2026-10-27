@@ -6,8 +6,9 @@ export function toCommentThread(thread: DiffCommentThread): CommentThread {
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     codeContent: thread.codeSnapshot?.content,
-    isQuestion: thread.isQuestion,
     messages: thread.messages,
+    resolution: thread.resolution,
+    isQuestion: thread.isQuestion,
   };
   if (thread.scope === 'review') return { ...common, scope: 'review' };
   return {

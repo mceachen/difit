@@ -15,7 +15,8 @@ interface CommentsListModalProps {
   onNavigate: (thread: CommentThread) => void;
   comments: CommentThread[];
   showAuthorBadges?: boolean;
-  onRemoveThread: (threadId: string) => void;
+  onToggleThreadResolved: (threadId: string) => void;
+  onRemoveThread?: (threadId: string) => void;
   onGenerateThreadPrompt: (thread: CommentThread) => string;
   onReplyToThread: (threadId: string, body: string) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
@@ -31,6 +32,7 @@ export function CommentsListModal({
   onNavigate,
   comments,
   showAuthorBadges = false,
+  onToggleThreadResolved,
   onRemoveThread,
   onGenerateThreadPrompt,
   onReplyToThread,
@@ -40,7 +42,11 @@ export function CommentsListModal({
   syntaxTheme,
 }: CommentsListModalProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [generalDraft, setGeneralDraft] = useState({ body: '', isQuestion: false });
+  const [filter, setFilter] = useState<'all' | 'open' | 'resolved'>('all');
+  const [generalDraft, setGeneralDraft] = useState<{
+    body: string;
+    isQuestion: boolean;
+  }>({ body: '', isQuestion: false });
   const commentRefs = useRef<(HTMLDivElement | null)[]>([]);
   const dialogRef = useRef<HTMLDivElement>(null);
   const { enableScope, disableScope } = useHotkeysContext();
@@ -49,16 +55,21 @@ export function CommentsListModal({
     if (isOpen) dialogRef.current?.focus();
   }, [isOpen]);
 
-  const sortedThreads = [...comments].sort((a, b) => {
-    const fileCompare = (a.file ?? '').localeCompare(b.file ?? '');
-    if (fileCompare !== 0) return fileCompare;
+  const sortedThreads = comments
+    .filter(
+      (thread) =>
+        filter === 'all' || Boolean(thread.resolution?.resolved) === (filter === 'resolved'),
+    )
+    .sort((a, b) => {
+      const fileCompare = (a.file ?? '').localeCompare(b.file ?? '');
+      if (fileCompare !== 0) return fileCompare;
 
-    const aLine = Array.isArray(a.line) ? a.line[0] : a.line;
-    const bLine = Array.isArray(b.line) ? b.line[0] : b.line;
-    if (aLine !== bLine) return (aLine ?? 0) - (bLine ?? 0);
+      const aLine = Array.isArray(a.line) ? a.line[0] : a.line;
+      const bLine = Array.isArray(b.line) ? b.line[0] : b.line;
+      if (aLine !== bLine) return (aLine ?? 0) - (bLine ?? 0);
 
-    return a.createdAt.localeCompare(b.createdAt);
-  });
+      return a.createdAt.localeCompare(b.createdAt);
+    });
 
   useEffect(() => {
     setSelectedIndex((index) => Math.max(0, Math.min(index, sortedThreads.length - 1)));
@@ -75,7 +86,7 @@ export function CommentsListModal({
 
   const handleRemoveThread = useCallback(
     (threadId: string) => {
-      onRemoveThread(threadId);
+      onRemoveThread?.(threadId);
       if (selectedIndex >= sortedThreads.length - 1 && selectedIndex > 0) {
         setSelectedIndex(selectedIndex - 1);
       }
@@ -83,14 +94,11 @@ export function CommentsListModal({
     [onRemoveThread, selectedIndex, sortedThreads.length],
   );
 
-  const handleDeleteThread = useCallback(
+  const handleToggleResolution = useCallback(
     (thread: CommentThread) => {
-      const preview = thread.messages[0]?.body || '';
-      if (confirm(`Resolve this thread?\n\n"${preview}"`)) {
-        handleRemoveThread(thread.id);
-      }
+      onToggleThreadResolved(thread.id);
     },
-    [handleRemoveThread],
+    [onToggleThreadResolved],
   );
 
   useEffect(() => {
@@ -142,11 +150,11 @@ export function CommentsListModal({
     'd',
     () => {
       if (sortedThreads[selectedIndex]) {
-        handleDeleteThread(sortedThreads[selectedIndex]);
+        handleToggleResolution(sortedThreads[selectedIndex]);
       }
     },
     hotkeyOptions,
-    [handleDeleteThread, selectedIndex, sortedThreads],
+    [handleToggleResolution, selectedIndex, sortedThreads],
   );
 
   useEffect(() => {
@@ -186,13 +194,29 @@ export function CommentsListModal({
           <div className="text-xs text-github-text-secondary">
             <span className="font-mono">j/k</span> or <span className="font-mono">↑/↓</span> to
             navigate • <span className="font-mono">Enter</span> to jump •{' '}
-            <span className="font-mono">d</span> to resolve • <span className="font-mono">Esc</span>{' '}
-            to close
+            <span className="font-mono">d</span> to resolve/reopen •{' '}
+            <span className="font-mono">Esc</span> to close
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="p-6">
+            <label className="mb-4 flex items-center gap-2 text-xs text-github-text-secondary">
+              Show
+              <select
+                aria-label="Conversation filter"
+                value={filter}
+                onChange={(event) => {
+                  setFilter(event.target.value as typeof filter);
+                  setSelectedIndex(0);
+                }}
+                className="rounded border border-github-border bg-github-bg-secondary p-1"
+              >
+                <option value="all">All conversations</option>
+                <option value="open">Open</option>
+                <option value="resolved">Resolved</option>
+              </select>
+            </label>
             {onAddGeneralComment && (
               <div className="mb-6">
                 <CommentForm
@@ -247,7 +271,8 @@ export function CommentsListModal({
                         thread={thread}
                         showAuthorBadges={showAuthorBadges}
                         onGeneratePrompt={onGenerateThreadPrompt}
-                        onRemoveThread={handleRemoveThread}
+                        onRemoveThread={onRemoveThread ? handleRemoveThread : undefined}
+                        onToggleThreadResolved={onToggleThreadResolved}
                         onReplyToThread={onReplyToThread}
                         onRemoveMessage={onRemoveMessage}
                         onUpdateMessage={onUpdateMessage}

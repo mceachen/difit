@@ -111,72 +111,91 @@ export function createCommentCommand(): Command {
       }
     });
 
-  comment
-    .command('resolve')
-    .alias('remove')
-    .description('Resolve (remove) comment threads on a running difit server')
-    .argument('<threadIds...>', 'thread IDs to resolve')
-    .requiredOption('--port <port>', 'port of the running difit server', parseInt)
-    .action(async (threadIds: string[], opts: { port: number }) => {
-      try {
-        const results = await Promise.all(
-          threadIds.map(
-            async (
-              threadId,
-            ): Promise<{
-              threadId: string;
-              status: 'resolved' | 'notFound' | 'error';
-              error?: string;
-            }> => {
-              const response = await fetch(
-                `http://localhost:${opts.port}/api/comments/${encodeURIComponent(threadId)}`,
-                { method: 'DELETE' },
-              );
-
-              if (response.ok) {
-                return { threadId, status: 'resolved' };
-              }
-
-              if (response.status === 404) {
-                return { threadId, status: 'notFound' };
-              }
-
-              const errorBody = (await response.json().catch(() => ({}))) as {
-                error?: string;
-              };
-              return {
+  for (const action of ['resolve', 'reopen', 'delete'] as const) {
+    const command = comment.command(action);
+    if (action === 'delete') command.alias('remove');
+    command
+      .description(
+        {
+          resolve: 'Mark comment threads resolved while preserving their messages',
+          reopen: 'Reopen resolved comment threads while preserving their messages',
+          delete: 'Delete comment threads from the current review selection',
+        }[action],
+      )
+      .argument('<threadIds...>', 'thread IDs')
+      .requiredOption('--port <port>', 'port of the running difit server', parseInt)
+      .action(async (threadIds: string[], opts: { port: number }) => {
+        try {
+          const results = await Promise.all(
+            threadIds.map(
+              async (
                 threadId,
-                status: 'error',
-                error: errorBody.error ?? `Failed to resolve thread ${threadId}`,
-              };
-            },
-          ),
-        );
+              ): Promise<{
+                threadId: string;
+                status: 'ok' | 'notFound' | 'error';
+                error?: string;
+              }> => {
+                const response = await fetch(
+                  `http://localhost:${opts.port}/api/comments/${encodeURIComponent(threadId)}${action === 'delete' ? '' : '/resolution'}`,
+                  action === 'delete'
+                    ? { method: 'DELETE' }
+                    : {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          resolved: action === 'resolve',
+                        }),
+                      },
+                );
 
-        const resolved = results.filter((r) => r.status === 'resolved').map((r) => r.threadId);
-        const notFound = results.filter((r) => r.status === 'notFound').map((r) => r.threadId);
-        const errors = results
-          .filter((r) => r.status === 'error')
-          .map((r) => ({
-            threadId: r.threadId,
-            error: r.error ?? `Failed to resolve thread ${r.threadId}`,
-          }));
+                if (response.ok) {
+                  return { threadId, status: 'ok' };
+                }
 
-        console.log(
-          JSON.stringify({
-            success: notFound.length === 0 && errors.length === 0,
-            resolved,
-            notFound,
-            errors,
-          }),
-        );
-        if (notFound.length > 0 || errors.length > 0) {
-          process.exit(1);
+                const errorBody = (await response.json().catch(() => ({}))) as {
+                  error?: string;
+                };
+                if (
+                  response.status === 404 &&
+                  (action === 'delete' || errorBody.error?.startsWith('Thread not found'))
+                ) {
+                  return { threadId, status: 'notFound' };
+                }
+                return {
+                  threadId,
+                  status: 'error',
+                  error: errorBody.error ?? `Failed to ${action} thread ${threadId}`,
+                };
+              },
+            ),
+          );
+
+          const completed = results.filter((r) => r.status === 'ok').map((r) => r.threadId);
+          const notFound = results.filter((r) => r.status === 'notFound').map((r) => r.threadId);
+          const errors = results
+            .filter((r) => r.status === 'error')
+            .map((r) => ({
+              threadId: r.threadId,
+              error: r.error ?? `Failed to ${action} thread ${r.threadId}`,
+            }));
+
+          console.log(
+            JSON.stringify({
+              success: notFound.length === 0 && errors.length === 0,
+              [action === 'resolve' ? 'resolved' : action === 'reopen' ? 'reopened' : 'deleted']:
+                completed,
+              notFound,
+              errors,
+            }),
+          );
+          if (notFound.length > 0 || errors.length > 0) {
+            process.exit(1);
+          }
+        } catch (error) {
+          handleCommandError(error, opts.port);
         }
-      } catch (error) {
-        handleCommandError(error, opts.port);
-      }
-    });
+      });
+  }
 
   return comment;
 }

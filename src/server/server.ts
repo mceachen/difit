@@ -623,6 +623,7 @@ export async function startServer(
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt,
         messages: thread.messages,
+        resolution: thread.resolution,
       };
     }
     if ('filePath' in thread && 'position' in thread) {
@@ -649,6 +650,7 @@ export async function startServer(
         : [
             {
               id: threadId,
+              resolution: thread.resolution,
               body: '',
               createdAt: thread.createdAt || now,
               updatedAt: thread.updatedAt || thread.createdAt || now,
@@ -659,6 +661,7 @@ export async function startServer(
 
     return {
       id: threadId,
+      resolution: thread.resolution,
       isQuestion: thread.isQuestion,
       filePath:
         typeof thread.file === 'string' && thread.file.length > 0 ? thread.file : '<unknown file>',
@@ -790,6 +793,38 @@ export async function startServer(
       console.error('Error parsing comment imports:', error);
       res.status(400).json({ error: 'Invalid comment import data' });
     }
+  });
+
+  app.post('/api/comments/:threadId/resolution', (req, res) => {
+    if (!req.is('application/json')) {
+      res.status(415).json({ error: 'Resolution updates require application/json' });
+      return;
+    }
+    const input = req.body as { resolved?: unknown; reviewId?: unknown } | null;
+    if (
+      !input ||
+      typeof input.resolved !== 'boolean' ||
+      (input.reviewId !== undefined && typeof input.reviewId !== 'string')
+    ) {
+      res.status(400).json({ error: 'Expected resolved boolean and optional reviewId' });
+      return;
+    }
+    const selection = getCommentSelectionFromQuery(req.query as Record<string, unknown>);
+    const session = getOrCreateCommentSession(selection);
+    if (!session.threads.some((thread) => thread.id === req.params.threadId)) {
+      res.status(404).json({ error: 'Thread not found' });
+      return;
+    }
+    const resolution = { resolved: input.resolved, updatedAt: new Date().toISOString() };
+    updateCommentSession(
+      selection,
+      session.threads.map((thread) =>
+        thread.id === req.params.threadId
+          ? { ...thread, updatedAt: resolution.updatedAt, resolution }
+          : thread,
+      ),
+    );
+    res.json({ success: true });
   });
 
   app.delete('/api/comments/:threadId', (req, res) => {

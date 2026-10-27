@@ -34,6 +34,7 @@ function KeyboardHarness() {
       <CommentsListModal
         {...props}
         comments={comments}
+        onToggleThreadResolved={vi.fn()}
         onRemoveThread={(id) => setComments((items) => items.filter((thread) => thread.id !== id))}
       />
     </HotkeysProvider>
@@ -63,6 +64,7 @@ function TriggerHarness({
         isOpen={open}
         onClose={() => setOpen(false)}
         comments={[inline]}
+        onToggleThreadResolved={vi.fn()}
         onRemoveThread={vi.fn()}
         onNavigate={onNavigate}
         onAddGeneralComment={onAddGeneralComment}

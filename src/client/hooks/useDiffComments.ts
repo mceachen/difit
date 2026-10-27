@@ -41,6 +41,7 @@ interface UseDiffCommentsReturn {
   addComment: (params: AddThreadParams) => LegacyDiffComment;
   addThread: (params: AddThreadParams) => DiffCommentThread;
   addReviewThread: (body: string, options?: { isQuestion?: boolean }) => void;
+  toggleThreadResolved: (threadId: string) => void;
   removeComment: (commentId: string) => void;
   replyToThread: (params: ReplyToThreadParams) => void;
   removeThread: (threadId: string) => void;
@@ -222,6 +223,24 @@ export function useDiffComments(
           messages: [{ id, body, author: 'User', createdAt: now, updatedAt: now }],
         },
       ]);
+    },
+    [saveThreads, threads],
+  );
+
+  const toggleThreadResolved = useCallback(
+    (threadId: string) => {
+      const now = new Date().toISOString();
+      saveThreads(
+        threads.map((thread) =>
+          thread.id === threadId
+            ? {
+                ...thread,
+                updatedAt: now,
+                resolution: { resolved: !thread.resolution?.resolved, updatedAt: now },
+              }
+            : thread,
+        ),
+      );
     },
     [saveThreads, threads],
   );
@@ -477,6 +496,7 @@ export function useDiffComments(
     addComment,
     addThread,
     addReviewThread,
+    toggleThreadResolved,
     removeComment,
     replyToThread,
     removeThread,

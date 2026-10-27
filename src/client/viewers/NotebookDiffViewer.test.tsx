@@ -71,7 +71,7 @@ const createProps = (overrides: Partial<DiffViewerBodyProps> = {}): DiffViewerBo
   expandAllBetweenChunks: vi.fn().mockResolvedValue(undefined),
   onAddComment: vi.fn().mockResolvedValue(undefined),
   onGenerateThreadPrompt: vi.fn(),
-  onRemoveThread: vi.fn(),
+  onToggleThreadResolved: vi.fn(),
   onReplyToThread: vi.fn().mockResolvedValue(undefined),
   onRemoveMessage: vi.fn(),
   onUpdateMessage: vi.fn(),

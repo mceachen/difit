@@ -52,7 +52,7 @@ describe('DiffChunk range comments', () => {
         mode="unified"
         onAddComment={onAddComment}
         onGenerateThreadPrompt={() => ''}
-        onRemoveThread={noop}
+        onToggleThreadResolved={noop}
         onReplyToThread={asyncNoop}
         onRemoveMessage={noop}
         onUpdateMessage={noop}
@@ -89,7 +89,7 @@ describe('DiffChunk range comments', () => {
         threads={[]}
         onAddComment={onAddComment}
         onGenerateThreadPrompt={() => ''}
-        onRemoveThread={noop}
+        onToggleThreadResolved={noop}
         onReplyToThread={asyncNoop}
         onRemoveMessage={noop}
         onUpdateMessage={noop}
@@ -127,7 +127,7 @@ describe('DiffChunk range comments', () => {
         mode={DEFAULT_DIFF_VIEW_MODE}
         onAddComment={onAddComment}
         onGenerateThreadPrompt={() => ''}
-        onRemoveThread={noop}
+        onToggleThreadResolved={noop}
         onReplyToThread={asyncNoop}
         onRemoveMessage={noop}
         onUpdateMessage={noop}
@@ -160,7 +160,7 @@ describe('DiffChunk range comments', () => {
         mode="unified"
         onAddComment={onAddComment}
         onGenerateThreadPrompt={() => ''}
-        onRemoveThread={noop}
+        onToggleThreadResolved={noop}
         onReplyToThread={asyncNoop}
         onRemoveMessage={noop}
         onUpdateMessage={noop}
@@ -200,7 +200,7 @@ describe('DiffChunk range comments', () => {
         threads={[]}
         onAddComment={onAddComment}
         onGenerateThreadPrompt={() => ''}
-        onRemoveThread={noop}
+        onToggleThreadResolved={noop}
         onReplyToThread={asyncNoop}
         onRemoveMessage={noop}
         onUpdateMessage={noop}

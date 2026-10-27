@@ -28,12 +28,14 @@ vi.mock('./hooks/useDiffComments', () => ({
     addComment: vi.fn(),
     addThread: vi.fn(),
     addReviewThread: vi.fn(),
+    toggleThreadResolved: vi.fn(),
     removeComment: vi.fn(),
     removeThread: vi.fn(),
     removeMessage: vi.fn(),
     replyToThread: vi.fn(),
     updateComment: vi.fn(),
     updateMessage: vi.fn(),
+    setThreadQuestion: vi.fn(),
     clearAllComments: mockClearAllComments,
     applyCommentImports: mockApplyCommentImports,
     generatePrompt: vi.fn(),
@@ -610,7 +612,7 @@ describe('App Component - Comment sync', () => {
     mockFetch(mockDiffResponse);
   });
 
-  it('syncs an empty comment list after the last comment is resolved', async () => {
+  it('syncs an empty comment list after the last comment is deleted', async () => {
     mockComments = [
       createMockThread({ id: 'test-1', filePath: 'test.ts', line: 10, body: 'Test comment' }),
     ];

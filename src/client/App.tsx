@@ -191,6 +191,7 @@ function App() {
     replaceThreads,
     addThread,
     addReviewThread,
+    toggleThreadResolved,
     replyToThread,
     removeThread,
     removeMessage,
@@ -1521,6 +1522,7 @@ function App() {
                       onToggleAllCollapsed={toggleAllFilesCollapsed}
                       onAddComment={handleAddComment}
                       onGenerateThreadPrompt={handleGenerateThreadPrompt}
+                      onToggleThreadResolved={toggleThreadResolved}
                       onRemoveThread={removeThread}
                       onReplyToThread={handleReplyToThread}
                       onRemoveMessage={removeMessage}
@@ -1607,6 +1609,7 @@ function App() {
             return Promise.resolve();
           }}
           showAuthorBadges={showAuthorBadges}
+          onToggleThreadResolved={toggleThreadResolved}
           onRemoveThread={removeThread}
           onGenerateThreadPrompt={handleGenerateThreadPrompt}
           onReplyToThread={handleReplyToThread}

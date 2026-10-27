@@ -41,6 +41,13 @@ Installed skills include:
 - `difit`: ask the user for a review in the difit viewer when the user explicitly opts in to difit
 - `difit-review`: review a specific diff or PR and show the findings inside the difit viewer, when the user explicitly asks for difit
 
+## Retained review discussions
+
+Resolve a thread to keep its messages for later review, then reopen it when needed.
+Use the Conversation filter to show open or resolved discussions. Delete is a separate
+confirmed action. The CLI provides `comment resolve`, `comment reopen`, and
+`comment delete`; `comment remove` remains an alias for deletion.
+
 ## 🚀 Usage
 
 ### Basic Usage

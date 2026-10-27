@@ -36,7 +36,8 @@ interface DiffChunkProps {
     options?: CommentSubmitOptions,
   ) => Promise<void>;
   onGenerateThreadPrompt: (thread: CommentThread) => string;
-  onRemoveThread: (threadId: string) => void;
+  onToggleThreadResolved: (threadId: string) => void;
+  onRemoveThread?: (threadId: string) => void;
   onReplyToThread: (threadId: string, body: string) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
   onUpdateMessage: (threadId: string, messageId: string, newBody: string) => void;
@@ -68,6 +69,7 @@ export const DiffChunk = memo(function DiffChunk({
   showAuthorBadges = false,
   onAddComment,
   onGenerateThreadPrompt,
+  onToggleThreadResolved,
   onRemoveThread,
   onReplyToThread,
   onRemoveMessage,
@@ -404,6 +406,7 @@ export const DiffChunk = memo(function DiffChunk({
         showAuthorBadges={showAuthorBadges}
         onAddComment={onAddComment}
         onGenerateThreadPrompt={onGenerateThreadPrompt}
+        onToggleThreadResolved={onToggleThreadResolved}
         onRemoveThread={onRemoveThread}
         onReplyToThread={onReplyToThread}
         onRemoveMessage={onRemoveMessage}
@@ -535,6 +538,7 @@ export const DiffChunk = memo(function DiffChunk({
                               thread={thread}
                               showAuthorBadges={showAuthorBadges}
                               onGeneratePrompt={onGenerateThreadPrompt}
+                              onToggleThreadResolved={onToggleThreadResolved}
                               onRemoveThread={onRemoveThread}
                               onReplyToThread={onReplyToThread}
                               onRemoveMessage={onRemoveMessage}

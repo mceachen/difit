@@ -30,6 +30,7 @@ interface ThreadMessageItemProps {
   actionLabel: string;
   confirmPrompt?: string;
   onDelete?: () => void;
+  confirmLabel: string;
   onClick?: (e: React.MouseEvent) => void;
 }
 
@@ -47,6 +48,7 @@ function ThreadMessageItem({
   actionLabel,
   confirmPrompt,
   onDelete,
+  confirmLabel,
   onClick,
 }: ThreadMessageItemProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -146,7 +148,7 @@ function ThreadMessageItem({
                       : 'text-green-700 hover:text-green-800'
                   }`}
                 >
-                  {isConfirmingDelete ? 'Delete' : 'Resolve'}
+                  {isConfirmingDelete ? 'Delete' : confirmLabel}
                 </button>
                 <button
                   type="button"
@@ -229,7 +231,8 @@ interface CommentThreadCardProps {
   showAuthorBadges?: boolean;
   confirmRootAction?: boolean;
   onGeneratePrompt: (thread: CommentThread) => string;
-  onRemoveThread: (threadId: string) => void;
+  onToggleThreadResolved: (threadId: string) => void;
+  onRemoveThread?: (threadId: string) => void;
   onReplyToThread: (threadId: string, body: string) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
   onUpdateMessage: (threadId: string, messageId: string, newBody: string) => void;
@@ -243,6 +246,7 @@ export function CommentThreadCard({
   showAuthorBadges = false,
   confirmRootAction = true,
   onGeneratePrompt,
+  onToggleThreadResolved,
   onRemoveThread,
   onReplyToThread,
   onRemoveMessage,
@@ -253,7 +257,10 @@ export function CommentThreadCard({
 }: CommentThreadCardProps) {
   const [isCopied, setIsCopied] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(Boolean(thread.resolution?.resolved));
+  useEffect(() => {
+    setIsCollapsed(Boolean(thread.resolution?.resolved));
+  }, [thread.resolution?.resolved]);
   const lineLabel = Array.isArray(thread.line)
     ? `${thread.line[0]}-${thread.line[1]}`
     : thread.line;
@@ -307,6 +314,21 @@ export function CommentThreadCard({
           >
             {thread.scope === 'review' ? 'Review conversation' : `${thread.file}:${lineLabel}`}
           </span>
+          {thread.resolution?.resolved && (
+            <>
+              <span className="text-github-text-muted">Resolved</span>
+              <button
+                type="button"
+                className="text-github-accent"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleThreadResolved(thread.id);
+                }}
+              >
+                Reopen
+              </button>
+            </>
+          )}
           {thread.isQuestion && (
             <span
               className="inline-flex h-5 shrink-0 items-center rounded-full border border-blue-500/60 px-2 text-[10px] font-medium text-blue-500"
@@ -399,10 +421,13 @@ export function CommentThreadCard({
             filename={thread.file}
             originalCode={thread.codeContent}
             onUpdate={(newBody) => onUpdateMessage(thread.id, rootMessage.id, newBody)}
-            onResolveOrDelete={() => onRemoveThread(thread.id)}
-            actionLabel="Resolve thread"
-            confirmPrompt={confirmRootAction ? 'Resolve?' : undefined}
-            onDelete={() => onRemoveThread(thread.id)}
+            onResolveOrDelete={() => onToggleThreadResolved(thread.id)}
+            actionLabel={thread.resolution?.resolved ? 'Reopen thread' : 'Resolve thread'}
+            confirmLabel={thread.resolution?.resolved ? 'Reopen' : 'Resolve'}
+            confirmPrompt={
+              confirmRootAction ? (thread.resolution?.resolved ? 'Reopen?' : 'Resolve?') : undefined
+            }
+            onDelete={onRemoveThread ? () => onRemoveThread(thread.id) : undefined}
           />
 
           {thread.messages.slice(1).map((message) => (
@@ -416,6 +441,7 @@ export function CommentThreadCard({
                 onUpdate={(newBody) => onUpdateMessage(thread.id, message.id, newBody)}
                 onResolveOrDelete={() => onRemoveMessage(thread.id, message.id)}
                 actionLabel="Delete reply"
+                confirmLabel="Delete"
                 confirmPrompt="Delete?"
               />
             </div>
@@ -437,7 +463,7 @@ export function CommentThreadCard({
                 filename={thread.file}
                 embedded={true}
                 title="Reply to thread"
-                submitLabel="Reply"
+                submitLabel="Send"
                 placeholder="Write a reply..."
               />
             ) : (

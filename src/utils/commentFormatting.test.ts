@@ -377,7 +377,7 @@ Explain why this was removed.`);
   });
 });
 
-it('formats general conversations with their replies', () => {
+it('keeps each reply below its header in a resolved general conversation', () => {
   const time = '2026-10-24T00:00:00Z';
   expect(
     formatCommentThreadPrompt({
@@ -385,6 +385,7 @@ it('formats general conversations with their replies', () => {
       scope: 'review',
       createdAt: time,
       updatedAt: time,
+      resolution: { resolved: true, updatedAt: time },
       messages: [
         { id: 'root', body: 'Root comment', createdAt: time, updatedAt: time },
         {
@@ -404,6 +405,6 @@ it('formats general conversations with their replies', () => {
       ],
     }),
   ).toBe(
-    'Review conversation\nRoot comment\nReply 1 (User)\nWhy?\nReply 2 (User)\nPlease change this.',
+    'Review conversation\nStatus: resolved\nRoot comment\nReply 1 (User)\nWhy?\nReply 2 (User)\nPlease change this.',
   );
 });

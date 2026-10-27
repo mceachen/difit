@@ -141,15 +141,12 @@ export function formatCommentThreadPrompt(thread: CommentThread): string {
     sections.push(QUESTION_PROMPT_MARKER);
   }
 
+  if (thread.resolution?.resolved) sections.push('Status: resolved');
   thread.messages.forEach((message, index) => {
-    if (index === 0) {
-      sections.push(formatCommentContent(message.body, thread.codeContent));
-      return;
+    if (index > 0) {
+      const authorLabel = message.author?.trim() || 'Unknown';
+      sections.push(`Reply ${index} (${authorLabel})`);
     }
-
-    const replyIndex = index;
-    const authorLabel = message.author?.trim() || 'Unknown';
-    sections.push(`Reply ${replyIndex} (${authorLabel})`);
     sections.push(formatCommentContent(message.body, thread.codeContent));
   });
 
