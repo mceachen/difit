@@ -1,7 +1,7 @@
 {
-  "name": "difit",
-  "version": "5.0.12",
-  "description": "A lightweight command-line tool that spins up a local web server to display Git commit diffs in a GitHub-like Files changed view",
+  "name": "@photostructure/difit",
+  "version": "5.1.0",
+  "description": "PhotoStructure fork of difit with live agent conversations and reversible LGTM review approval",
   "keywords": [
     "cli",
     "code-review",
@@ -13,15 +13,15 @@
     "review",
     "tailwind"
   ],
-  "homepage": "https://github.com/yoshiko-pg/difit",
+  "homepage": "https://github.com/photostructure/difit",
   "bugs": {
-    "url": "https://github.com/yoshiko-pg/difit/issues"
+    "url": "https://github.com/photostructure/difit/issues"
   },
   "license": "MIT",
   "author": "yoshiko-pg",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yoshiko-pg/difit.git"
+    "url": "https://github.com/photostructure/difit.git"
   },
   "bin": {
     "difit": "./dist/cli/index.js"
@@ -30,12 +30,18 @@
     "dist",
     "!dist/client/site-data",
     "!dist/site",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "docs/agent-conversations.md",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*",
+    "!dist/**/*.map"
   ],
   "type": "module",
   "main": "./dist/cli/index.js",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   },
   "scripts": {
     "dev": "node scripts/dev.js",
@@ -55,7 +61,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "lefthook install",
-    "prepublishOnly": "NODE_ENV=production pnpm run build",
     "perf": "node scripts/measure-performance.js",
     "perf:small": "node scripts/measure-performance.js --size small",
     "perf:medium": "node scripts/measure-performance.js --size medium",
@@ -113,7 +118,7 @@
     "vitest": "^4.0.6"
   },
   "engines": {
-    "node": ">=21.0.0"
+    "node": ">=22.14.0"
   },
   "packageManager": "pnpm@11.6.0"
 }

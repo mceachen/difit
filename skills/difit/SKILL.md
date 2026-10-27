@@ -16,9 +16,15 @@ difit opens an external browser UI and starts a long-running local server, so la
 ## Overview
 
 This skill requests a code review from the user using difit.
-Verify the difit version at session start and use the same version for the server
-and comment commands. Conversation and LGTM controls are opt-in. Showing an approval
-control does not authorize a commit; follow the user's review and commit approval rules.
+Use `npx --yes @photostructure/difit` wherever this skill says
+`<difit-command>`, or a local `difit` launcher explicitly installed from this
+scoped package. Verify `--version` when starting a session and use the same
+version for the server and all comment commands. Do not substitute unscoped
+`difit` from npm.
+
+Conversation and the LGTM toggle are opt-in. Enable them with `--conversation`
+and `--lgtm` when requested. Showing the toggle alone does not authorize a commit; follow
+the user's review and commit approval rules.
 
 For a requested live conversation or an adopted LGTM approval workflow, use the section below. Otherwise use the ordinary Commands flow and address review comments returned when the server exits.
 If the server is shut down without comments, treat it as "no review comments were provided." Restarting it is unnecessary.
@@ -26,16 +32,16 @@ Manual verification of whether the page launched correctly is also unnecessary.
 
 ## Commands
 
-- Review uncommitted changes before commit: `difit .`
-- Review the HEAD commit: `difit`
-- Review staging area changes: `difit staged`
-- Review unstaged changes only: `difit working`
+- Review uncommitted changes before commit: `<difit-command> .`
+- Review the HEAD commit: `<difit-command>`
+- Review staging area changes: `<difit-command> staged`
+- Review unstaged changes only: `<difit-command> working`
 
 Basic Usage:
 
 ```bash
-difit <target>                    # View single commit diff. ex: difit 6f4a9b7
-difit <target> [compare-with]     # Compare two commits/branches. ex: difit feature main
+<difit-command> <target>                    # View single commit diff. ex: difit 6f4a9b7
+<difit-command> <target> [compare-with]     # Compare two commits/branches. ex: difit feature main
 ```
 
 ## Optional Startup Comments
@@ -44,7 +50,7 @@ If there is something you want to tell the user when difit opens, attach it as s
 This is useful for review findings, explanations, and any context the user should see directly on the diff.
 
 ```bash
-difit <target> [compare-with] \
+<difit-command> <target> [compare-with] \
   --comment '{"type":"thread","filePath":"src/foobar.ts","position":{"side":"old","line":102},"body":"line 1\nline 2"}' \
   --comment '{"type":"thread","filePath":"src/example.ts","position":{"side":"new","line":{"start":36,"end":39}},"body":"Range comment for L36-L39"}'
 ```
@@ -61,7 +67,7 @@ difit <target> [compare-with] \
 For uncommitted changes, if files not yet added to git should also appear in the diff, add `--include-untracked`.
 
 ```bash
-difit . --include-untracked
+<difit-command> . --include-untracked
 ```
 
 ## Reusing a Running Server
@@ -72,9 +78,9 @@ Keep at most one live difit server per Git root and review target. When you edit
 - If one is running for the same target, do not start another and do not reopen its URL. For working-tree targets (`.`, `working`, `staged`, and the HEAD default) difit watches the repository, and the open page prompts the user to reload when the diff changes.
 - If review rounds are expected to repeat, start the server with `--keep-alive` (the server survives browser disconnects) or `--background` (a detached keep-alive server; prints JSON like `{"port":4966,"url":"http://localhost:4966","pid":123}` and does not auto-open a browser, so share the URL with the user once).
 - While the server stays alive, exchange feedback without restarting it:
-  - `difit comment get --port <port>` — read the user's review comments (`--format json` for structured output).
-  - `difit comment add --port <port> '<json>'` — add new comments to the running server (same JSON shape as `--comment`).
-  - `difit comment delete <threadId...> --port <port>` — delete threads only when the user requests removal; leave answered conversation threads visible.
+  - `<difit-command> comment get --port <port>` — read the user's review comments (`--format json` for structured output).
+  - `<difit-command> comment add --port <port> '<json>'` — add new comments to the running server (same JSON shape as `--comment`).
+  - `<difit-command> comment delete <threadId...> --port <port>` — delete threads only when the user requests removal; leave answered conversation threads visible.
 - If the review target changes (for example, a different commit range), stop the existing server and start a new one rather than leaving two servers for the same repository.
 
 ## Constraints
@@ -97,7 +103,7 @@ substitute an older published version. Use an available source build or report
 the missing capability; installation is a separate action. Ordinary review
 requests remain usable with older versions.
 
-Launch `difit <target> <base> --conversation --keep-alive`.
+Launch `<difit-command> <target> <base> --conversation --keep-alive`.
 Add `--ship-it` only for the adopted conditional approval workflow. Retain the
 process handle, actual API port, and stdout. Keep the foreground process handle and watch stream available for this review. Reuse a compatible server for the same review.
 
@@ -116,14 +122,14 @@ patch, base SHA, and included untracked file contents before launch. Track
 subsequent requested fixes. LGTM covers that recorded scope and those fixes;
 it does not approve unrelated edits merely because the target still says `.`.
 
-- Run `difit comment watch --port <port> --once --wait 25000`
+- Run `<difit-command> comment watch --port <port> --once --wait 25000`
   while the review is active; resume each batch with `--after <cursor>`.
   Stdout contains JSON Lines and `conversation.cursor` checkpoints; stderr
   carries errors. Persist pending work before advancing the cursor.
 - Handle each `origin: "user"` event promptly: answer questions or begin requested
   fixes while the user continues reviewing. Ignore agent-origin events to avoid
   answering yourself. Use the event's revisions, location, and code snapshot.
-- Report progress with `difit comment status --port <port> < <status-json-file>`.
+- Report progress with `<difit-command> comment status --port <port> < <status-json-file>`.
   The JSON contains `reviewId`, `threadId`, `messageId`, `cursor` from the user
   event and `status`: `read` when inspecting it, `thinking` while working, then
   `replying` while composing the answer. Watch acknowledges Delivered automatically.
@@ -141,7 +147,7 @@ it does not approve unrelated edits merely because the target still says `.`.
 - Create reply JSON with a file-writing tool: `reviewId`, `threadId`, `inReplyTo`
   (the event's `messageId`), `cursor` (the event's cursor), `body`, and optional
   `author`. Send it through
-  `difit comment reply --port <port> < <reply-json-file>`.
+  `<difit-command> comment reply --port <port> < <reply-json-file>`.
   Answers render live; identical retries do not duplicate them. Leave answered
   threads visible. Resolve only when the user asks:
   `comment resolve <threadId> --review <reviewId> --port <port>` preserves
@@ -149,7 +155,7 @@ it does not approve unrelated edits merely because the target still says `.`.
   reverses it. A reply or Noted status does not resolve a thread.
   `comment delete` (alias `remove`) deletes threads; use only for requested removal.
 - Keep one watch loop active, checking queued events between work steps. On an
-  expired cursor or restart, run `difit comment snapshot --port <port>`;
+  expired cursor or restart, run `<difit-command> comment snapshot --port <port>`;
   reconcile its reviews/threads and resume with `--after <snapshot.cursor>`.
   Compare restored IDs/bodies and existing replies with handled work before
   answering again. A quiet/ended stream is not approval. Stdout cannot wake an

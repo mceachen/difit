@@ -147,6 +147,8 @@ git diff --cached | difit -
 | `--host`              | 127.0.0.1      | 서버를 바인딩할 호스트 주소 (외부 액세스는 0.0.0.0 사용)                                      |
 | `--no-open`           | false          | 브라우저를 자동으로 열지 않음                                                                 |
 | `--clean`             | false          | 시작 시 모든 기존 코멘트와 열람된 파일 표시 초기화                                            |
+| `--lgtm, --ship-it`   | false          | LGTM 승인을 설정하거나 취소하며 검토 화면은 열린 상태로 유지                                  |
+| `--conversation`      | false          | 실시간 댓글 이벤트와 지정 스레드에 대한 에이전트 답글을 활성화                                |
 | `--include-untracked` | false          | diff에 untracked 파일 자동 포함 (`.` 또는 `working`에서만 유효)                               |
 | `--keep-alive`        | false          | 브라우저 연결이 끊겨도 서버 유지 (Ctrl+C로 수동 종료)                                         |
 | `--background`        | false          | 서버를 백그라운드에서 계속 실행하고 JSON 연결 정보 출력                                       |
@@ -227,6 +229,15 @@ difit은 특정 파일을 자동으로 식별하고 접어서 뷰를 깔끔하�
     - `DO NOT EDIT` 헤더가 포함된 파일
     - 언어별 생성 헤더 (Go, Python 등)
 
+## 에이전트와 대화
+
+`difit <target> <base> --conversation --keep-alive`를 사용하면 검토를
+계속하는 동안 에이전트가 제출된 댓글에 답할 수 있습니다. 별도 프로세스에서
+`difit comment watch --port <port>`는 JSON Lines를 출력하고, `comment reply`는
+정확한 검토 스레드에 답글을 보냅니다. 도구 기반 에이전트는 `comment watch --once`로
+대기 시간을 제한할 수 있습니다. 조건부 LGTM 승인 규칙을 포함한 자세한 내용은
+[대화 프로토콜과 에이전트 워크플로](docs/agent-conversations.md)를 참조하세요.
+
 ## 🛠️ 개발
 
 ```bash
@@ -278,19 +289,6 @@ pnpm run format
 ## 📄 라이선스
 
 MIT
-
-## Live agent conversations
-
-Use `--conversation --keep-alive` to stream saved comments to a watching agent and
-receive replies in their original discussions. This is opt-in and does not start an
-agent automatically. See [the conversation protocol](docs/agent-conversations.md).
-
-## Reversible review approval
-
-Use `--lgtm` (alias `--ship-it`) to show the opt-in LGTM approval toggle. Approval
-starts off, stays scoped to the displayed selection, and can be revoked while the
-review remains open. Conversation watchers receive approval changes immediately.
-See [the approval workflow](docs/agent-conversations.md).
 
 선택 기능인 `--ship-it` 버튼은 사용자가 제공한
 [이 동영상](https://www.youtube.com/watch?v=3TNpOD6bov8)의 LGTM 스크린샷을 사용합니다.

@@ -1,10 +1,59 @@
+# @photostructure/difit
+
+PhotoStructure's fork of [difit](https://github.com/yoshiko-pg/difit), originally by yoshiko-pg.
+
+## What this fork adds
+
+This fork builds on Yoshiko's diff viewer with a review workflow for coding agents:
+
+- **Conversation drawer:** discuss the whole review alongside inline code threads,
+  reply in either place, and retain drafts when moving between a discussion and code.
+- **Live agent feedback:** submitted comments reach the agent immediately through
+  JSON events; exact-thread replies appear in the viewer while the review continues.
+- **Comment progress:** see Delivered, Read, Thinking, Replying, Replied, or Noted
+  when the agent reports its activity. This does not wake an idle agent automatically.
+- **Reversible LGTM:** approval stays visible and can be revoked. Conversations
+  and the approval toggle are opt-in; approval starts off.
+- **Questions and retained discussions:** label a thread as a question, resolve
+  and reopen it without losing the history, or explicitly delete it.
+- **Repository information:** expand the Repository info node in the file tree to
+  see the reviewed repository, worktree, server, and launch directory. The browser
+  title identifies the repository and port; the disclosure fits mobile screens.
+
+The question marker and explicit thread deletion incorporate
+[upstream PR #482](https://github.com/yoshiko-pg/difit/pull/482).
+Reusable UI and conversation changes are being prepared as focused commits for
+upstream; scoped packaging, publishing, and default flags belong to this fork.
+
+## Run the PhotoStructure package
+
+```sh
+npx @photostructure/difit .
+```
+
+Live agent conversations and the reversible LGTM approval toggle are opt-in.
+Approval starts off; click LGTM to approve or revoke. Use `--no-lgtm` for a read-only review
+and `--no-conversation` to disable live events. `--lgtm` and `--ship-it` are aliases.
+The agent must actively watch and answer comments; the viewer does not start an agent.
+See [the agent conversation protocol](docs/agent-conversations.md).
+
+Install with `npm install -g @photostructure/difit` to use the `difit` command.
+Node.js 22.14 or newer is required. On other machines, verify the package version
+with `npx @photostructure/difit --version` before beginning a review.
+
+The LGTM image was supplied from [this video](https://www.youtube.com/watch?v=3TNpOD6bov8);
+its rights remain with the respective rights holders. Upstream code attribution and
+license are retained below.
+
+---
+
 <h1 align="center">
   <img src="public/logo.png" alt="difit" width="260">
 </h1>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/difit"><img src="https://img.shields.io/npm/v/difit.svg" alt="npm version"></a>
-  <a href="https://github.com/yoshiko-pg/difit/actions/workflows/pr.yml"><img src="https://github.com/yoshiko-pg/difit/actions/workflows/pr.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.npmjs.com/package/@photostructure/difit"><img src="https://img.shields.io/npm/v/@photostructure/difit.svg" alt="npm version"></a>
+  <a href="https://github.com/photostructure/difit/actions/workflows/pr.yml"><img src="https://github.com/photostructure/difit/actions/workflows/pr.yml/badge.svg" alt="CI"></a>
 </p>
 
 <p align="center">
@@ -20,39 +69,26 @@
 Try it first
 
 ```bash
-npx difit  # View the latest commit diff in WebUI
+npx @photostructure/difit  # View the latest commit diff in WebUI
 ```
 
 Install and use
 
 ```bash
-npm install -g difit
+npm install -g @photostructure/difit
 difit  # View the latest commit diff in WebUI
 ```
 
 Enable use from AI agents
 
 ```bash
-npx skills add yoshiko-pg/difit # Add the Skills to your agent
+npx skills add photostructure/difit # Add the Skills to your agent
 ```
 
 Installed skills include:
 
 - `difit`: ask the user for a review in the difit viewer when the user explicitly opts in to difit
 - `difit-review`: review a specific diff or PR and show the findings inside the difit viewer, when the user explicitly asks for difit
-
-## Retained review discussions
-
-Resolve a thread to keep its messages for later review, then reopen it when needed.
-Use the Conversation filter to show open or resolved discussions. Delete is a separate
-confirmed action. The CLI provides `comment resolve`, `comment reopen`, and
-`comment delete`; `comment remove` remains an alias for deletion.
-
-## Message intent
-
-Choose Comment, Question, or Request change for a new message or reply. A general
-conversation draft keeps its text, question marker, and intent when the drawer closes
-or a previous send completes. The thread question toggle updates the root message intent.
 
 ## 🚀 Usage
 
@@ -165,6 +201,8 @@ Stdin mode is selected with intent-first rules:
 | `--host`              | 127.0.0.1       | Host address to bind server to (use 0.0.0.0 for external access)                                        |
 | `--no-open`           | false           | Don't automatically open browser                                                                        |
 | `--clean`             | false           | Clear all existing comments and viewed files on startup                                                 |
+| `--lgtm, --ship-it`   | false           | Show the LGTM toggle to grant or revoke approval while the review stays open                            |
+| `--conversation`      | false           | Enable live comment events and exact-thread agent replies                                               |
 | `--include-untracked` | false           | Automatically include untracked files in diff (only with `.` or `working`)                              |
 | `--keep-alive`        | false           | Keep server running after browser disconnects (stop manually with Ctrl+C)                               |
 | `--background`        | false           | Keep the server running in the background and output JSON connection info                               |
@@ -208,7 +246,7 @@ This section is unnecessary
 You can install the following Skills to work with difit from AI agents.
 
 ```sh
-npx skills add yoshiko-pg/difit
+npx skills add photostructure/difit
 ```
 
 Installed skills include:
@@ -253,6 +291,111 @@ difit automatically identifies and collapses certain files to keep your view cle
     - Files containing `@generated` marker
     - Files containing `DO NOT EDIT` header
     - Language-specific generated headers (Go, Python, etc.)
+
+## Agent conversations
+
+Use `difit <target> <base> --conversation --keep-alive` to let an agent
+answer submitted comments while you continue reviewing. In another process,
+`difit comment watch --port <port>` streams JSON Lines; `comment reply` sends
+answers to the exact review thread. A bounded `comment watch --once` wait is
+available for tool-driven agents. See [the conversation protocol and agent
+workflow](docs/agent-conversations.md), including conditional LGTM approval.
+
+## HTTPS and remote browsers
+
+The browser's [Clipboard API](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/writeText)
+requires a secure context. Localhost is treated as trustworthy for local development;
+a remote HTTP address such as `http://10.1.1.24:4966` generally is not. difit tries a
+legacy copy fallback, but trusted HTTPS is the reliable setup for remote browsers.
+Browser permissions can still prevent copying.
+
+Start the built difit server on the machine containing the repository:
+
+```sh
+difit . --host localhost --port 4966 --no-open --keep-alive
+```
+
+Use the actual port printed at startup if 4966 is occupied. From a source checkout,
+run `pnpm build`, then use `node dist/cli/index.js` in place of `difit`.
+Proxy this server, which serves both the UI and `/api`, at the root of one HTTPS
+origin. The development server (`pnpm dev`, usually port 5173) can embed a localhost
+API address for event streams, so it is not the target for these recipes.
+
+The proxy must stream Server-Sent Events (SSE) on `/api/watch` and `/api/heartbeat`
+without buffering or caching. `--keep-alive` prevents a dropped browser connection
+from ending the review. difit has no built-in login: anyone who can reach the
+service can access the review and its enabled actions. Use an authenticated proxy
+for private repositories; HTTPS alone does not restrict access.
+
+### Cloudflare Tunnel (`cloudflared`)
+
+For ongoing remote reviews, use a [named Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/get-started/)
+with a hostname such as `review.example.com`, routed to service type HTTP at
+`localhost:4966`. Configure a Cloudflare Access policy for the intended reviewers
+before exposing private code, and open the resulting HTTPS hostname. Keep `/api/*`
+uncached and confirm live updates using the checks below.
+
+For a temporary preview, an installed `cloudflared` can create a Quick Tunnel:
+
+```sh
+cloudflared tunnel --url http://localhost:4966
+```
+
+Open the HTTPS URL printed by the command. However, [Quick Tunnels do not support
+SSE](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/), which
+difit uses for live updates. They are unsuitable for the full conversation workflow:
+a page loading and Copy working do not establish that replies or approval changes
+will update live. The URL is public unless access restrictions are configured.
+
+### localtunnel
+
+With [localtunnel](https://github.com/localtunnel/localtunnel), run a second process:
+
+```sh
+pnpm dlx localtunnel --port 4966 --local-host localhost
+```
+
+Open its printed HTTPS URL. This exposes the review through a third-party service;
+use non-sensitive diffs for a public preview. Verify streaming replies and updates
+before relying on a hosted tunnel for a review. Stop the tunnel when finished.
+
+### local-ip.sh on a LAN
+
+[local-ip.sh](https://local-ip.sh/) provides DNS names for IP addresses. For example,
+`10-1-1-24.local-ip.sh` resolves to `10.1.1.24`. The reviewing device must be able to
+reach that address; this does not create a tunnel or turn difit's HTTP server into
+an HTTPS server.
+
+Run a TLS reverse proxy on the repository machine. For example, with Caddy installed,
+use this `Caddyfile`, replacing the address with that machine's LAN IP:
+
+```caddyfile
+https://10-1-1-24.local-ip.sh:8443 {
+    tls internal
+    reverse_proxy localhost:4966
+}
+```
+
+Run `caddy run --config Caddyfile`, allow the reviewing device to reach port 8443,
+and open `https://10-1-1-24.local-ip.sh:8443`. Caddy's `tls internal` uses a local CA;
+install and trust its root certificate on each reviewing device before using the
+page. Alternatively, configure a certificate trusted by those devices with Caddy's
+[`tls` directive](https://caddyserver.com/docs/caddyfile/directives/tls).
+[Caddy streams SSE responses](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#streaming).
+
+local-ip.sh also publishes a wildcard certificate and its private key. Because that
+key is public, use your own certificate for private code. The hostname alone,
+or bypassing a certificate warning, is not a substitute for trusted HTTPS.
+
+### Check copying and live conversations
+
+Open the HTTPS page without a certificate warning, click Copy Prompt, and paste
+into a text editor. For conversations, add `--conversation` when starting difit
+and run `difit comment watch --port 4966` on the repository machine. Submit a comment
+from the remote browser, verify it appears in the local stream, then send a
+[reply](docs/agent-conversations.md) and confirm it appears without refreshing.
+Agent commands still connect to localhost on the repository machine; the browser
+can use the HTTPS proxy. They do not acquire remote-host support from the URL.
 
 ## 🛠️ Development
 
@@ -305,19 +448,6 @@ pnpm run format
 ## 📄 License
 
 MIT
-
-## Live agent conversations
-
-Use `--conversation --keep-alive` to stream saved comments to a watching agent and
-receive replies in their original discussions. This is opt-in and does not start an
-agent automatically. See [the conversation protocol](docs/agent-conversations.md).
-
-## Reversible review approval
-
-Use `--lgtm` (alias `--ship-it`) to show the opt-in LGTM approval toggle. Approval
-starts off, stays scoped to the displayed selection, and can be revoked while the
-review remains open. Conversation watchers receive approval changes immediately.
-See [the approval workflow](docs/agent-conversations.md).
 
 The optional `--ship-it` button uses a user-supplied LGTM screenshot from
 [this video](https://www.youtube.com/watch?v=3TNpOD6bov8). The image belongs to

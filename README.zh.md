@@ -147,6 +147,8 @@ git diff --cached | difit -
 | `--host`              | 127.0.0.1      | 绑定服务器的主机地址（使用 0.0.0.0 进行外部访问）                                 |
 | `--no-open`           | false          | 不自动打开浏览器                                                                  |
 | `--clean`             | false          | 启动时清除所有现有评论和已查看的文件                                              |
+| `--lgtm, --ship-it`   | false          | 切换 LGTM 审批，可批准或撤销，并保持评审窗口打开                                  |
+| `--conversation`      | false          | 启用实时评论事件和向指定线程发送的代理回复                                        |
 | `--include-untracked` | false          | 自动将 untracked 文件包含在 diff 中（仅在 `.` 或 `working` 时有效）               |
 | `--keep-alive`        | false          | 浏览器断开后保持服务器运行（使用 Ctrl+C 手动停止）                                |
 | `--background`        | false          | 在后台保持服务器运行，并输出 JSON 连接信息                                        |
@@ -227,6 +229,14 @@ difit 自动识别并折叠某些文件以保持视图整洁：
     - 包含 `DO NOT EDIT` 标头的文件
     - 特定语言的生成标头 (Go, Python 等)
 
+## 与代理对话
+
+使用 `difit <target> <base> --conversation --keep-alive`，代理即可在您继续
+审查时回复已提交的评论。在另一个进程中，`difit comment watch --port <port>`
+输出 JSON Lines，`comment reply` 向指定的审查线程发送回复。通过工具运行的代理
+可使用 `comment watch --once` 限制等待时间。有关有条件的 LGTM 批准规则等详细信息，
+请参阅[对话协议与代理工作流程](docs/agent-conversations.md)。
+
 ## 🛠️ 开发
 
 ```bash
@@ -278,19 +288,6 @@ pnpm run format
 ## 📄 许可证
 
 MIT
-
-## Live agent conversations
-
-Use `--conversation --keep-alive` to stream saved comments to a watching agent and
-receive replies in their original discussions. This is opt-in and does not start an
-agent automatically. See [the conversation protocol](docs/agent-conversations.md).
-
-## Reversible review approval
-
-Use `--lgtm` (alias `--ship-it`) to show the opt-in LGTM approval toggle. Approval
-starts off, stays scoped to the displayed selection, and can be revoked while the
-review remains open. Conversation watchers receive approval changes immediately.
-See [the approval workflow](docs/agent-conversations.md).
 
 可选的 `--ship-it` 按钮使用了用户提供的
 [此视频](https://www.youtube.com/watch?v=3TNpOD6bov8)中的 LGTM 截图。

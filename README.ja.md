@@ -147,6 +147,8 @@ git diff --cached | difit -
 | `--host`              | 127.0.0.1       | サーバーをバインドするホストアドレス（外部からアクセスしたい場合は0.0.0.0を指定）          |
 | `--no-open`           | false           | ブラウザを自動的に開かない                                                                 |
 | `--clean`             | false           | 起動時に既存コメントと閲覧済みファイルをすべてクリア                                       |
+| `--lgtm, --ship-it`   | false           | LGTM の承認を切り替える（レビューを開いたまま承認・取り消し）                              |
+| `--conversation`      | false           | ライブコメントイベントと、指定スレッドへのエージェント返信を有効にする                     |
 | `--include-untracked` | false           | diffにuntrackedファイルを自動的に含める（`.`または`working`のみ有効）                      |
 | `--keep-alive`        | false           | ブラウザ切断後もサーバーを終了せず起動したままにする（Ctrl+Cで手動停止）                   |
 | `--background`        | false           | サーバーをバックグラウンドで起動したままにし、接続情報をJSONで出力                         |
@@ -227,6 +229,15 @@ difitは特定のファイルを自動的に識別し、ビューをすっきり
     - `DO NOT EDIT` ヘッダーを含むファイル
     - 言語固有の自動生成ヘッダー (Go, Pythonなど)
 
+## エージェントとの会話
+
+`difit <target> <base> --conversation --keep-alive` を使うと、レビューを
+続けながら、送信したコメントにエージェントが返信できます。別のプロセスで
+`difit comment watch --port <port>` を実行すると JSON Lines が流れ、`comment reply`
+で対象のレビュースレッドに返信できます。ツール経由のエージェントは
+`comment watch --once` で待機時間を区切れます。条件付きの LGTM 承認についても、
+[会話プロトコルとエージェントのワークフロー](docs/agent-conversations.md)を参照してください。
+
 ## 🛠️ 開発
 
 ```bash
@@ -278,19 +289,6 @@ pnpm run format
 ## 📄 ライセンス
 
 MIT
-
-## Live agent conversations
-
-Use `--conversation --keep-alive` to stream saved comments to a watching agent and
-receive replies in their original discussions. This is opt-in and does not start an
-agent automatically. See [the conversation protocol](docs/agent-conversations.md).
-
-## Reversible review approval
-
-Use `--lgtm` (alias `--ship-it`) to show the opt-in LGTM approval toggle. Approval
-starts off, stays scoped to the displayed selection, and can be revoked while the
-review remains open. Conversation watchers receive approval changes immediately.
-See [the approval workflow](docs/agent-conversations.md).
 
 オプションの `--ship-it` ボタンには、ユーザーが提供した
 [この動画](https://www.youtube.com/watch?v=3TNpOD6bov8)の LGTM スクリーンショットを使用しています。
