@@ -1185,14 +1185,13 @@ function App() {
   };
 
   const closeEmptyCommentForms = (e: React.MouseEvent) => {
-    const emptyForms = document.querySelectorAll(
+    const emptyForms = document.querySelectorAll<HTMLFormElement>(
       'form[data-empty="true"]:not([data-dismiss-on-outside-click="false"])',
     );
     emptyForms.forEach((form) => {
       // Don't close if clicking inside the form itself
       if (!form.contains(e.target as Node)) {
-        const cancelButton = form.querySelector<HTMLButtonElement>('[data-comment-cancel="true"]');
-        cancelButton?.click();
+        form.reset();
       }
     });
   };

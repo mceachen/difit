@@ -15,6 +15,19 @@ describe('CommentForm', () => {
       intent: 'question',
     });
   });
+  it('allows empty-form dismissal without a Cancel button', () => {
+    const onCancel = vi.fn();
+    const { container } = render(
+      <CommentForm onSubmit={vi.fn()} onCancel={onCancel} selectedCode="const value = 1;" />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+
+    fireEvent.reset(container.querySelector('form')!);
+    expect(onCancel).toHaveBeenCalledOnce();
+    expect(screen.getByRole('textbox')).toHaveValue('');
+  });
+
   it('hides the question toggle unless enabled', () => {
     render(<CommentForm onSubmit={vi.fn()} onCancel={vi.fn()} />);
     expect(screen.queryByRole('checkbox', { name: 'Question' })).not.toBeInTheDocument();

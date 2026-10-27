@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
@@ -93,7 +93,6 @@ describe('Conversation keyboard navigation', () => {
     await user.type(screen.getByRole('textbox'), 'Why this approach?');
     await user.tab();
     await user.tab();
-    await user.tab();
     expect(screen.getByRole('button', { name: 'Send' })).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(onAddGeneralComment).toHaveBeenCalledWith('Why this approach?', { isQuestion: false });
@@ -155,7 +154,7 @@ describe('Conversation drafts', () => {
     expect(screen.getByRole('combobox', { name: 'Comment intent' })).toHaveValue('change');
   });
 
-  it.each(['Cancel', 'Escape'])(
+  it.each(['Reset', 'Escape'])(
     'discards the draft when explicitly cancelling with %s',
     async (action) => {
       const user = userEvent.setup();
@@ -163,8 +162,8 @@ describe('Conversation drafts', () => {
       await user.click(screen.getByRole('button', { name: 'Open conversation' }));
       await user.type(screen.getByRole('textbox'), 'Never mind');
       await user.click(screen.getByRole('checkbox', { name: 'Question' }));
-      if (action === 'Cancel') {
-        await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      if (action === 'Reset') {
+        fireEvent.reset(screen.getByRole('textbox').closest('form')!);
       } else {
         await user.keyboard('{Escape}');
       }

@@ -114,6 +114,10 @@ export function CommentForm({
           : 'm-2 mx-3 rounded-md border border-yellow-600/50 border-l-4 border-l-yellow-400 bg-github-bg-tertiary p-3'
       }
       onSubmit={handleSubmit}
+      onReset={(event) => {
+        event.preventDefault();
+        if (!isSubmitting) onCancel();
+      }}
       onClick={(e) => e.stopPropagation()}
       data-empty={!body.trim()}
       data-dismiss-on-outside-click={dismissOnOutsideClick}
@@ -219,15 +223,6 @@ export function CommentForm({
             Question
           </label>
         )}
-        <button
-          type="button"
-          data-comment-cancel="true"
-          onClick={onCancel}
-          className="text-xs px-3 py-1.5 bg-github-bg-tertiary text-github-text-primary border border-github-border rounded hover:opacity-80 transition-all disabled:opacity-50"
-          disabled={isSubmitting}
-        >
-          Cancel
-        </button>
         <button
           type="submit"
           className="text-xs px-3 py-1.5 rounded transition-all disabled:opacity-50"
