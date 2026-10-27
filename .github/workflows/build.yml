@@ -1,0 +1,125 @@
+name: Build & Prepare Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Use current for the prepared first release; otherwise select a version bump
+        required: true
+        default: patch
+        type: choice
+        options: [current, patch, minor, major]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Create signed release commit and tag
+    runs-on: ubuntu-24.04
+    needs: ci
+    if: github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: difit-release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Require configured signing inputs
+        env:
+          SSH_SIGNING_KEY: ${{ secrets.SSH_SIGNING_KEY }}
+          GIT_USER_NAME: ${{ secrets.GIT_USER_NAME }}
+          GIT_USER_EMAIL: ${{ secrets.GIT_USER_EMAIL }}
+        run: |
+          if [[ -z "$SSH_SIGNING_KEY" || -z "$GIT_USER_NAME" || -z "$GIT_USER_EMAIL" ]]; then
+            echo '::error::Configure SSH_SIGNING_KEY, GIT_USER_NAME, and GIT_USER_EMAIL before preparing a signed release'
+            exit 1
+          fi
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          # Required only in this dependency-free signing/push job.
+          persist-credentials: true
+      - name: Verify the tested default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" || "$DEFAULT_BRANCH" != main ]]; then
+            echo '::error::Dispatch releases from the repository default main branch'
+            exit 1
+          fi
+          git fetch --no-tags origin "$DEFAULT_BRANCH"
+          if [[ "$(git rev-parse "origin/$DEFAULT_BRANCH")" != "$GITHUB_SHA" ]]; then
+            echo '::error::The default branch moved after validation; rerun from its new head'
+            exit 1
+          fi
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24.22.1
+          package-manager-cache: false
+      - name: Configure release signatures
+        uses: photostructure/git-ssh-signing-action@abd2a642ab7d704f66193472b47c72375d85a0c1 # v2.0.1
+        with:
+          ssh-signing-key: ${{ secrets.SSH_SIGNING_KEY }}
+          git-user-name: ${{ secrets.GIT_USER_NAME }}
+          git-user-email: ${{ secrets.GIT_USER_EMAIL }}
+      - name: Prepare only the package version
+        id: version
+        env:
+          BUMP: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          case "$BUMP" in
+            current) ;;
+            patch|minor|major) npm version "$BUMP" --no-git-tag-version --ignore-scripts ;;
+            *) echo '::error::Unsupported version operation'; exit 1 ;;
+          esac
+          if ! git diff --quiet -- . ':(exclude)package.json'; then
+            echo '::error::Version preparation changed unexpected files'
+            git diff --name-only
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const before = JSON.parse(execFileSync('git', ['show', 'HEAD:package.json'], { encoding: 'utf8' }));
+          const after = JSON.parse(readFileSync('package.json', 'utf8'));
+          assert.equal(after.name, '@photostructure/difit');
+          assert.equal(after.repository.url, `https://github.com/${process.env.GITHUB_REPOSITORY}.git`);
+          assert.match(after.version, /^\d+\.\d+\.\d+$/u);
+          before.version = after.version;
+          assert.deepEqual(after, before, 'Only the version field may change');
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${after.version}\ntag=v${after.version}\n`);
+          NODE
+      - name: Create and push the signed commit and annotated tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git add package.json
+          # current signs the already-tested prepared version without changing its tree.
+          git commit --allow-empty -m "chore(release): $VERSION"
+          git tag -m "Release $VERSION" "$TAG"
+          git push --atomic origin HEAD:main "refs/tags/$TAG"
+
+  dispatch:
+    runs-on: ubuntu-24.04
+    needs: release
+    permissions:
+      actions: write
+    steps:
+      # A GITHUB_TOKEN-created tag does not trigger another workflow run.
+      - name: Dispatch publisher at the exact release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: gh workflow run publish.yaml --repo "$GITHUB_REPOSITORY" --ref "$TAG"

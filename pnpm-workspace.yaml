@@ -14,3 +14,5 @@ onlyBuiltDependencies:
   - esbuild
   - keytar
   - lefthook
+
+minimumReleaseAge: 20160

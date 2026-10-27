@@ -1,0 +1,85 @@
+name: Publish GitHub Release after npm approval
+run-name: GitHub release ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-release-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      package_version: ${{ steps.identity.outputs.package_version }}
+      tag_object_sha: ${{ steps.identity.outputs.tag_object_sha }}
+    steps:
+      - name: Require the fork release tag before checkout
+        run: |
+          if [[ ! "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo '::error::Dispatch at a vMAJOR.MINOR.PATCH tag after npm approval'
+            exit 1
+          fi
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24.22.1
+          package-manager-cache: false
+      - name: Validate package identity and verified signatures
+        id: identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release-validate-tag.sh
+      - name: Require the approved version to be public on npm
+        env:
+          VERSION: ${{ steps.identity.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          npm view "@photostructure/difit@$VERSION" version repository.url gitHead dist.integrity --json --registry=https://registry.npmjs.org > "$RUNNER_TEMP/npm-package.json"
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/npm-package.json`, 'utf8'));
+          assert.equal(pkg.version, process.env.VERSION);
+          assert.equal(pkg['repository.url']?.replace(/^git\+/u, ''), `https://github.com/${process.env.GITHUB_REPOSITORY}.git`);
+          assert.match(pkg['dist.integrity'], /^sha512-/u);
+          if (pkg.gitHead) assert.equal(pkg.gitHead, process.env.GITHUB_SHA);
+          NODE
+
+  release:
+    runs-on: ubuntu-24.04
+    needs: validate
+    permissions:
+      contents: write
+    steps:
+      - name: Recheck the exact signed tag and create the immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_TAG_OBJECT_SHA: ${{ needs.validate.outputs.tag_object_sha }}
+        run: |
+          set -euo pipefail
+          # Immutability is confirmed in the manual settings gate. Its settings
+          # endpoint requires administration:read, which GITHUB_TOKEN cannot hold.
+          REF_JSON="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")"
+          if [[ "$(jq -r '.object.type' <<< "$REF_JSON")" != tag || "$(jq -r '.object.sha' <<< "$REF_JSON")" != "$EXPECTED_TAG_OBJECT_SHA" ]]; then
+            echo '::error::Release tag changed after validation'
+            exit 1
+          fi
+          TAG_JSON="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$EXPECTED_TAG_OBJECT_SHA")"
+          COMMIT_VERIFIED="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA" --jq '.commit.verification.verified')"
+          if [[ "$(jq -r '.object.type' <<< "$TAG_JSON")" != commit || "$(jq -r '.object.sha' <<< "$TAG_JSON")" != "$GITHUB_SHA" || "$(jq -r '.verification.verified' <<< "$TAG_JSON")" != true || "$COMMIT_VERIFIED" != true ]]; then
+            echo '::error::Release tag moved or lost a verified signature'
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
+          if [[ "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq '.immutable')" != true ]]; then
+            echo '::error::The published release is not immutable; verify repository release settings'
+            exit 1
+          fi

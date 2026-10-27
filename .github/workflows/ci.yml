@@ -8,25 +8,28 @@ permissions:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: 24.22.1
+          package-manager-cache: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
           version: 11.6.0
+          run_install: false
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Run lint and typecheck
         run: pnpm run check
@@ -42,3 +45,51 @@ jobs:
 
       - name: Build package
         run: pnpm run build
+
+      - name: Rehearse the publishing package path
+        run: node scripts/release-package.mjs pack package-artifact
+
+      - name: Verify build and packaging preserved tracked sources
+        run: git diff --exit-code
+
+      - name: Share the verified consumer package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-package-check
+          path: package-artifact/
+          if-no-files-found: error
+          retention-days: 1
+
+  package-acceptance:
+    name: Package acceptance (${{ matrix.os }}, Node ${{ matrix.node }})
+    needs: ci
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            node: 22.14.0
+          - os: ubuntu-24.04
+            node: 24.22.1
+          - os: macos-15
+            node: 24.22.1
+          - os: windows-2025
+            node: 24.22.1
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Give the minimum Node lane an npm with dependency cooldown support
+        if: matrix.node == '22.14.0'
+        run: npm install --global npm@11.19.1 --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-package-check
+          path: package-artifact
+      - name: Install and invoke the packed CLI
+        run: node scripts/release-package.mjs rehearse package-artifact

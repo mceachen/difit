@@ -31,9 +31,9 @@ jobs:
 
           if git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD \
             | grep -Eq '^(src/|scripts/|\.github/workflows/performance\.yml$)'; then
-            echo "run_benchmark=true" >> $GITHUB_OUTPUT
+            echo "run_benchmark=true" >> "$GITHUB_OUTPUT"
           else
-            echo "run_benchmark=false" >> $GITHUB_OUTPUT
+            echo "run_benchmark=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup Node.js
@@ -61,7 +61,7 @@ jobs:
         working-directory: head
         run: |
           PLAYWRIGHT_VERSION=$(cat package.json | jq -r '.devDependencies.playwright // empty')
-          echo "version=$PLAYWRIGHT_VERSION" >> $GITHUB_OUTPUT
+          echo "version=$PLAYWRIGHT_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Cache Playwright browsers
         if: steps.changes.outputs.run_benchmark == 'true'
@@ -168,7 +168,7 @@ jobs:
         working-directory: head
         run: |
           # Run comparison script and output markdown directly to GitHub Step Summary
-          node scripts/compare-performance.js performance-results/base-merged.json performance-results/head-merged.json >> $GITHUB_STEP_SUMMARY
+          node scripts/compare-performance.js performance-results/base-merged.json performance-results/head-merged.json >> "$GITHUB_STEP_SUMMARY"
 
           # Also get JSON output for status check
           COMPARISON_JSON=$(node scripts/compare-performance.js performance-results/base-merged.json performance-results/head-merged.json --json)
@@ -178,14 +178,14 @@ jobs:
 
           # Determine status based on percentage change
           if (( $(echo "$CHANGE_PERCENT > 10" | bc -l) )); then
-            echo "status=degraded" >> $GITHUB_OUTPUT
-            echo "change_percent=$CHANGE_PERCENT" >> $GITHUB_OUTPUT
+            echo "status=degraded" >> "$GITHUB_OUTPUT"
+            echo "change_percent=$CHANGE_PERCENT" >> "$GITHUB_OUTPUT"
           elif (( $(echo "$CHANGE_PERCENT < -5" | bc -l) )); then
-            echo "status=improved" >> $GITHUB_OUTPUT
-            echo "change_percent=$CHANGE_PERCENT" >> $GITHUB_OUTPUT
+            echo "status=improved" >> "$GITHUB_OUTPUT"
+            echo "change_percent=$CHANGE_PERCENT" >> "$GITHUB_OUTPUT"
           else
-            echo "status=neutral" >> $GITHUB_OUTPUT
-            echo "change_percent=$CHANGE_PERCENT" >> $GITHUB_OUTPUT
+            echo "status=neutral" >> "$GITHUB_OUTPUT"
+            echo "change_percent=$CHANGE_PERCENT" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check performance degradation
