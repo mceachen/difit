@@ -35,6 +35,7 @@ export function isThreadOutdated(
   thread: DiffCommentThread,
   index: FileLineIndex | undefined,
 ): boolean {
+  if (thread.scope === 'review') return false;
   const snapshot = thread.codeSnapshot?.content;
   if (snapshot === undefined) return false;
 

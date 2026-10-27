@@ -15,11 +15,17 @@ interface CommentFormProps {
   syntaxTheme?: AppearanceSettings['syntaxTheme'];
   filename?: string;
   initialValue?: string;
+  value?: string;
+  onChange?: React.Dispatch<React.SetStateAction<string>>;
   embedded?: boolean;
   title?: string;
   submitLabel?: string;
   placeholder?: string;
+  autoFocus?: boolean;
+  dismissOnOutsideClick?: boolean;
   showQuestionToggle?: boolean;
+  questionValue?: boolean;
+  onQuestionChange?: (isQuestion: boolean) => void;
 }
 
 type CommentFormMode = 'edit' | 'preview';
@@ -31,14 +37,26 @@ export function CommentForm({
   syntaxTheme,
   filename,
   initialValue = '',
+  value,
+  onChange,
   embedded = false,
   title = 'Add a comment',
   submitLabel = 'Submit',
+  autoFocus = true,
+  dismissOnOutsideClick = true,
   placeholder = 'Leave a comment...',
   showQuestionToggle = false,
+  questionValue,
+  onQuestionChange,
 }: CommentFormProps) {
-  const [body, setBody] = useState(initialValue);
-  const [isQuestion, setIsQuestion] = useState(false);
+  const [localBody, setLocalBody] = useState(initialValue);
+  const body = value ?? localBody;
+  const setBody = (nextBody: React.SetStateAction<string>) => {
+    setLocalBody(nextBody);
+    onChange?.(nextBody);
+  };
+  const [localIsQuestion, setLocalIsQuestion] = useState(false);
+  const isQuestion = questionValue ?? localIsQuestion;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mode, setMode] = useState<CommentFormMode>('edit');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -53,8 +71,10 @@ export function CommentForm({
     setIsSubmitting(true);
     try {
       await onSubmit(body.trim(), { isQuestion: showQuestionToggle && isQuestion });
-      setBody('');
-      setIsQuestion(false);
+      if (value === undefined) {
+        setBody((currentBody) => (currentBody === body ? '' : currentBody));
+      }
+      setLocalIsQuestion(false);
       setMode('edit');
     } catch (error) {
       console.error('Failed to submit comment:', error);
@@ -81,6 +101,7 @@ export function CommentForm({
       onSubmit={handleSubmit}
       onClick={(e) => e.stopPropagation()}
       data-empty={!body.trim()}
+      data-dismiss-on-outside-click={dismissOnOutsideClick}
     >
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium" style={{ color: 'var(--color-yellow-path-text)' }}>
@@ -139,7 +160,7 @@ export function CommentForm({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           rows={Math.max(3, body.split('\n').length)}
-          autoFocus
+          autoFocus={autoFocus}
           disabled={isSubmitting}
         />
       )}
@@ -153,7 +174,11 @@ export function CommentForm({
             <input
               type="checkbox"
               checked={isQuestion}
-              onChange={(e) => setIsQuestion(e.target.checked)}
+              onKeyDown={handleKeyDown}
+              onChange={(e) => {
+                setLocalIsQuestion(e.target.checked);
+                onQuestionChange?.(e.target.checked);
+              }}
               disabled={isSubmitting}
             />
             Question

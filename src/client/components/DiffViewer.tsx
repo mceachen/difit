@@ -94,6 +94,7 @@ const normalizeCommentRanges = (threads: CommentThread[]): Record<DiffSide, Line
   const ranges: Record<DiffSide, LineRange[]> = { old: [], new: [] };
 
   threads.forEach((thread) => {
+    if (thread.scope === 'review') return;
     const side = thread.side ?? 'new';
     const [start, end] = Array.isArray(thread.line)
       ? [thread.line[0], thread.line[1]]

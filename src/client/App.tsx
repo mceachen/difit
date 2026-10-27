@@ -13,6 +13,7 @@ import {
 } from '../types/diff';
 import { DEFAULT_DIFF_VIEW_MODE, normalizeDiffViewMode } from '../utils/diffMode';
 import { mergeCommentThreads } from '../utils/commentImports';
+import { toCommentThread } from '../utils/commentThreads';
 import {
   createDiffSelection,
   diffSelectionsEqual,
@@ -189,6 +190,7 @@ function App() {
     threads,
     replaceThreads,
     addThread,
+    addReviewThread,
     replyToThread,
     removeThread,
     removeMessage,
@@ -516,19 +518,10 @@ function App() {
   const normalizedThreads = useMemo<CommentThread[]>(
     () =>
       threads.map((thread) => ({
-        id: thread.id,
-        file: thread.filePath,
-        line:
-          typeof thread.position.line === 'number'
-            ? thread.position.line
-            : ([thread.position.line.start, thread.position.line.end] as [number, number]),
-        side: thread.position.side,
-        createdAt: thread.createdAt,
-        updatedAt: thread.updatedAt,
-        codeContent: thread.codeSnapshot?.content,
-        isOutdated: isThreadOutdated(thread, fileLineIndexByPath.get(thread.filePath)),
-        isQuestion: thread.isQuestion,
-        messages: thread.messages,
+        ...toCommentThread(thread),
+        isOutdated:
+          thread.scope !== 'review' &&
+          isThreadOutdated(thread, fileLineIndexByPath.get(thread.filePath)),
       })),
     [threads, fileLineIndexByPath],
   );
@@ -539,6 +532,7 @@ function App() {
   const threadsByFile = useMemo(() => {
     const map = new Map<string, CommentThread[]>();
     normalizedThreads.forEach((thread) => {
+      if (thread.scope === 'review') return;
       const entry = map.get(thread.file);
       if (entry) {
         entry.push(thread);
@@ -585,7 +579,7 @@ function App() {
   const { cursor, isHelpOpen, setIsHelpOpen, setCursorPosition, rememberFilePosition } =
     useKeyboardNavigation({
       files: navigableFiles,
-      comments: normalizedThreads,
+      comments: normalizedThreads.filter((thread) => thread.scope !== 'review'),
       viewMode: diffMode,
       reviewedFiles: viewedFiles,
       onToggleReviewed: toggleFileReviewed,
@@ -1160,7 +1154,9 @@ function App() {
   };
 
   const closeEmptyCommentForms = (e: React.MouseEvent) => {
-    const emptyForms = document.querySelectorAll('form[data-empty="true"]');
+    const emptyForms = document.querySelectorAll(
+      'form[data-empty="true"]:not([data-dismiss-on-outside-click="false"])',
+    );
     emptyForms.forEach((form) => {
       // Don't close if clicking inside the form itself
       if (!form.contains(e.target as Node)) {
@@ -1311,6 +1307,13 @@ function App() {
                 isMobile ? 'gap-3' : 'gap-4'
               }`}
             >
+              <button
+                type="button"
+                onClick={() => setIsCommentsListOpen(true)}
+                className="rounded border border-github-border px-3 py-1.5 text-xs text-github-text-primary hover:bg-github-bg-tertiary"
+              >
+                Conversation
+              </button>
               {!isMobile && threads.length > 0 && (
                 <CommentsDropdown
                   commentsCount={threads.length}
@@ -1598,6 +1601,10 @@ function App() {
           onClose={() => setIsCommentsListOpen(false)}
           onNavigate={handleNavigateToComment}
           comments={normalizedThreads}
+          onAddGeneralComment={(body, options) => {
+            addReviewThread(body, options);
+            return Promise.resolve();
+          }}
           showAuthorBadges={showAuthorBadges}
           onRemoveThread={removeThread}
           onGenerateThreadPrompt={handleGenerateThreadPrompt}

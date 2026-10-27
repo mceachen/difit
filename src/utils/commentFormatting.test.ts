@@ -376,3 +376,34 @@ Explain why this was removed.`);
     });
   });
 });
+
+it('formats general conversations with their replies', () => {
+  const time = '2026-10-24T00:00:00Z';
+  expect(
+    formatCommentThreadPrompt({
+      id: 'review-thread',
+      scope: 'review',
+      createdAt: time,
+      updatedAt: time,
+      messages: [
+        { id: 'root', body: 'Root comment', createdAt: time, updatedAt: time },
+        {
+          id: 'question',
+          author: 'User',
+          body: 'Why?',
+          createdAt: time,
+          updatedAt: time,
+        },
+        {
+          id: 'change',
+          author: 'User',
+          body: 'Please change this.',
+          createdAt: time,
+          updatedAt: time,
+        },
+      ],
+    }),
+  ).toBe(
+    'Review conversation\nRoot comment\nReply 1 (User)\nWhy?\nReply 2 (User)\nPlease change this.',
+  );
+});

@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   type BaseMode,
   type CommentImport,
-  type CommentThread,
   type DiffContextStorage,
   type DiffCommentThread,
   type DiffSide,
@@ -14,6 +13,7 @@ import {
   formatCommentThreadPrompt,
   formatAllCommentThreadsPrompt,
 } from '../../utils/commentFormatting';
+import { toCommentThread as normalizeThread } from '../../utils/commentThreads';
 import { createId } from '../../utils/createId';
 import { mergeCommentImports } from '../../utils/commentImports';
 import { storageService } from '../services/StorageService';
@@ -40,6 +40,7 @@ interface UseDiffCommentsReturn {
   replaceThreads: (threads: DiffCommentThread[]) => void;
   addComment: (params: AddThreadParams) => LegacyDiffComment;
   addThread: (params: AddThreadParams) => DiffCommentThread;
+  addReviewThread: (body: string, options?: { isQuestion?: boolean }) => void;
   removeComment: (commentId: string) => void;
   replyToThread: (params: ReplyToThreadParams) => void;
   removeThread: (threadId: string) => void;
@@ -54,26 +55,9 @@ interface UseDiffCommentsReturn {
   generateAllCommentsPrompt: (context?: CommentPromptDiffContext) => string;
 }
 
-function normalizeThread(thread: DiffCommentThread): CommentThread {
-  return {
-    id: thread.id,
-    file: thread.filePath,
-    line:
-      typeof thread.position.line === 'number'
-        ? thread.position.line
-        : ([thread.position.line.start, thread.position.line.end] as [number, number]),
-    side: thread.position.side,
-    createdAt: thread.createdAt,
-    updatedAt: thread.updatedAt,
-    codeContent: thread.codeSnapshot?.content,
-    isQuestion: thread.isQuestion,
-    messages: thread.messages,
-  };
-}
-
 function normalizeRootComment(thread: DiffCommentThread): LegacyDiffComment | null {
   const rootMessage = thread.messages[0];
-  if (!rootMessage) return null;
+  if (!rootMessage || thread.scope === 'review') return null;
 
   return {
     id: thread.id,
@@ -219,6 +203,25 @@ export function useDiffComments(
       const newThreads = [...threads, newThread];
       saveThreads(newThreads);
       return newThread;
+    },
+    [saveThreads, threads],
+  );
+
+  const addReviewThread = useCallback(
+    (body: string, options?: { isQuestion?: boolean }) => {
+      const now = new Date().toISOString();
+      const id = createId();
+      saveThreads([
+        ...threads,
+        {
+          id,
+          scope: 'review',
+          ...(options?.isQuestion ? { isQuestion: true } : {}),
+          createdAt: now,
+          updatedAt: now,
+          messages: [{ id, body, author: 'User', createdAt: now, updatedAt: now }],
+        },
+      ]);
     },
     [saveThreads, threads],
   );
@@ -473,6 +476,7 @@ export function useDiffComments(
     replaceThreads,
     addComment,
     addThread,
+    addReviewThread,
     removeComment,
     replyToThread,
     removeThread,

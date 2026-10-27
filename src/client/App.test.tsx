@@ -27,6 +27,7 @@ vi.mock('./hooks/useDiffComments', () => ({
     replaceThreads: mockReplaceThreads,
     addComment: vi.fn(),
     addThread: vi.fn(),
+    addReviewThread: vi.fn(),
     removeComment: vi.fn(),
     removeThread: vi.fn(),
     removeMessage: vi.fn(),
@@ -204,6 +205,38 @@ describe('App Component - Clear Comments Functionality', () => {
     mockApplyCommentImports.mockReturnValue([]);
     mockConfirm.mockReturnValue(false);
     mockFetch(mockDiffResponse);
+  });
+
+  it('keeps Conversation open when an empty general composer loses focus to a thread action', async () => {
+    const root = createMockThread({
+      id: 'general',
+      filePath: 'test.ts',
+      line: 1,
+      body: 'General question',
+    });
+    mockComments = [
+      {
+        id: root.id,
+        scope: 'review',
+        createdAt: root.createdAt,
+        updatedAt: root.updatedAt,
+        messages: root.messages,
+      },
+    ];
+    renderApp();
+    fireEvent.click(await screen.findByRole('button', { name: 'Conversation' }));
+    expect(screen.getByPlaceholderText('Comment or ask about this review…')).toHaveValue('');
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse thread' }));
+    expect(screen.getByRole('dialog', { name: 'Conversation' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand thread' })).toBeInTheDocument();
+  });
+
+  it('opens Conversation before any comments exist', async () => {
+    mockComments = [];
+    renderApp();
+    fireEvent.click(await screen.findByRole('button', { name: 'Conversation' }));
+    expect(screen.getByRole('dialog', { name: 'Conversation' })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Comment or ask about this review…')).toBeInTheDocument();
   });
 
   describe('Copy All Prompt Button', () => {

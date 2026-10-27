@@ -212,6 +212,7 @@ function rootThreadMatchesImport(
   thread: DiffCommentThread,
   commentImport: ThreadCommentImport,
 ): boolean {
+  if (thread.scope === 'review') return false;
   if (commentImport.id && thread.id === commentImport.id) {
     return true;
   }
@@ -325,6 +326,9 @@ function cloneMessage(message: DiffCommentMessage): DiffCommentMessage {
 }
 
 function cloneThread(thread: DiffCommentThread): DiffCommentThread {
+  if (thread.scope === 'review') {
+    return { ...thread, messages: thread.messages.map(cloneMessage) };
+  }
   return {
     id: thread.id,
     filePath: thread.filePath,
@@ -354,6 +358,7 @@ function threadsMatch(left: DiffCommentThread, right: DiffCommentThread): boolea
     return true;
   }
 
+  if (left.scope === 'review' || right.scope === 'review') return false;
   if (left.filePath !== right.filePath || !positionsMatch(left.position, right.position)) {
     return false;
   }
@@ -421,7 +426,10 @@ function mergeThread(
         ? existingThread.createdAt
         : incomingThread.createdAt,
     updatedAt,
-    position: clonePosition(existingThread.position),
+    isQuestion:
+      incomingThread.updatedAt.localeCompare(existingThread.updatedAt) >= 0
+        ? incomingThread.isQuestion
+        : existingThread.isQuestion,
     codeSnapshot: cloneCodeSnapshot(incomingThread.codeSnapshot ?? existingThread.codeSnapshot),
     messages: orderedMessages,
   };
@@ -504,6 +512,7 @@ export function mergeCommentImports(
     const targetThreads = threads
       .filter(
         (thread) =>
+          thread.scope !== 'review' &&
           thread.filePath === commentImport.filePath &&
           positionsMatch(thread.position, commentImport.position),
       )

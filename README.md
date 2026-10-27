@@ -167,6 +167,15 @@ difit includes a review comment system that makes it easy to provide feedback to
 4. **Copy All**: Use "Copy All Prompt" to copy all comments in a structured format
 5. **Persistent Storage**: Comments are saved in browser localStorage per commit
 
+### Review-wide conversations
+
+Open **Conversation** in the header to see the review's discussions in a side panel.
+Start a general discussion there when feedback applies to the whole review rather
+than one line. General threads support replies, editing, and Copy Prompt just like
+inline threads, and are saved with the selected comparison. Click an inline thread
+to jump to its code; general threads stay in the panel. Copy All and CLI comment
+output include both kinds of discussion.
+
 ### Comment Prompt Format
 
 ```sh

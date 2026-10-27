@@ -1,3 +1,4 @@
+import { toCommentThread } from '../utils/commentThreads.js';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { type Server } from 'http';
@@ -541,7 +542,7 @@ export async function startServer(
     }
   });
 
-  function normalizeLineValue(line: unknown): DiffCommentThread['position']['line'] {
+  function normalizeLineValue(line: unknown): NonNullable<DiffCommentThread['position']>['line'] {
     if (Array.isArray(line) && line.length === 2) {
       const start = line[0] as unknown;
       const end = line[1] as unknown;
@@ -602,24 +603,17 @@ export async function startServer(
     };
   }
 
-  function toCommentThread(thread: DiffCommentThread): CommentThread {
-    return {
-      id: thread.id,
-      file: thread.filePath,
-      line:
-        typeof thread.position.line === 'number'
-          ? thread.position.line
-          : ([thread.position.line.start, thread.position.line.end] as [number, number]),
-      side: thread.position.side,
-      createdAt: thread.createdAt,
-      updatedAt: thread.updatedAt,
-      codeContent: thread.codeSnapshot?.content,
-      isQuestion: thread.isQuestion,
-      messages: thread.messages,
-    };
-  }
-
   function normalizeThreadPayload(thread: CommentThread | DiffCommentThread): DiffCommentThread {
+    if (thread.scope === 'review') {
+      return {
+        id: thread.id,
+        scope: 'review',
+        isQuestion: thread.isQuestion,
+        createdAt: thread.createdAt,
+        updatedAt: thread.updatedAt,
+        messages: thread.messages,
+      };
+    }
     if ('filePath' in thread && 'position' in thread) {
       return thread;
     }
@@ -654,6 +648,7 @@ export async function startServer(
 
     return {
       id: threadId,
+      isQuestion: thread.isQuestion,
       filePath:
         typeof thread.file === 'string' && thread.file.length > 0 ? thread.file : '<unknown file>',
       createdAt: thread.createdAt || firstMessage?.createdAt || now,

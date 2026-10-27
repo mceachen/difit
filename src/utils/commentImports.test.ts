@@ -4,6 +4,7 @@ import type { CommentImport, DiffCommentThread } from '../types/diff';
 
 import {
   mergeCommentImports,
+  mergeCommentThreads,
   parseCommentImportValue,
   serializeCommentImports,
 } from './commentImports';
@@ -262,3 +263,92 @@ describe('commentImports', () => {
     });
   });
 });
+
+it('merges review-wide replies in either order without inventing a location', () => {
+  const root = createThread({ id: 'general', body: 'Review-wide discussion' });
+  const general: DiffCommentThread = {
+    id: root.id,
+    scope: 'review',
+    createdAt: root.createdAt,
+    updatedAt: root.updatedAt,
+    messages: root.messages,
+  };
+  const replied = {
+    ...general,
+    updatedAt: '2024-02-01T00:00:00Z',
+    messages: [
+      ...general.messages,
+      {
+        id: 'reply',
+        body: 'Reply',
+        createdAt: '2024-02-01T00:00:00Z',
+        updatedAt: '2024-02-01T00:00:00Z',
+      },
+    ],
+  };
+  for (const merged of [
+    mergeCommentThreads([general], [replied]),
+    mergeCommentThreads([replied], [general]),
+  ]) {
+    expect(merged.threads).toHaveLength(1);
+    expect(merged.threads[0]).toMatchObject({
+      scope: 'review',
+      messages: [{ body: 'Review-wide discussion' }, { body: 'Reply' }],
+    });
+    expect(merged.threads[0]).not.toHaveProperty('position');
+    expect(merged.threads[0]).not.toHaveProperty('filePath');
+  }
+  const imported = mergeCommentImports(
+    [general],
+    [
+      {
+        type: 'thread',
+        filePath: 'src/example.ts',
+        position: { side: 'new', line: 10 },
+        body: 'Inline comment',
+      },
+      {
+        type: 'reply',
+        filePath: 'src/example.ts',
+        position: { side: 'new', line: 10 },
+        body: 'Inline reply',
+      },
+    ],
+  );
+  expect(imported.threads).toHaveLength(2);
+  expect(imported.threads[0]).toEqual(general);
+  expect(imported.threads[1]!.messages).toHaveLength(2);
+  expect(imported.warnings).toEqual([]);
+});
+
+it.each(['review', 'line'] as const)(
+  'keeps the newest %s question setting regardless of merge order',
+  (scope) => {
+    const inline = createThread({ id: 'question', body: 'Why?' });
+    const original: DiffCommentThread =
+      scope === 'review'
+        ? {
+            id: inline.id,
+            scope,
+            messages: inline.messages,
+            createdAt: inline.createdAt,
+            updatedAt: inline.updatedAt,
+          }
+        : inline;
+    const question = { ...original, isQuestion: true, updatedAt: '2024-01-02T00:00:00.000Z' };
+    const normal = { ...question, isQuestion: undefined, updatedAt: '2024-01-03T00:00:00.000Z' };
+    for (const [older, newer] of [
+      [original, question],
+      [question, normal],
+    ] as const) {
+      for (const [existing, incoming] of [
+        [older, newer],
+        [newer, older],
+      ] as const) {
+        expect(mergeCommentThreads([existing], [incoming]).threads[0]?.isQuestion).toBe(
+          newer.isQuestion,
+        );
+      }
+    }
+  },
+);

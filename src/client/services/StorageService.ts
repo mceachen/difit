@@ -42,7 +42,7 @@ function migrateLegacyComment(comment: LegacyDiffComment): DiffCommentThread {
 
 function normalizeRootComment(thread: DiffCommentThread): LegacyDiffComment | null {
   const rootMessage = thread.messages[0];
-  if (!rootMessage) return null;
+  if (!rootMessage || thread.scope === 'review') return null;
 
   return {
     id: thread.id,

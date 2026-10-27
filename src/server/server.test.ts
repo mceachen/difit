@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 process.env.VITEST_SERVER_TEST = 'true';
 
 import { startServer } from './server.js';
-import type { CommentImport } from '../types/diff.js';
+import type { CommentImport, DiffCommentThread } from '../types/diff.js';
 
 // Add fetch polyfill for Node.js test environment
 const { fetch } = await import('undici');
@@ -223,6 +223,98 @@ describe('Server Integration Tests', () => {
         threads: Array<{ id: string; filePath: string }>;
       };
     };
+
+    it('roundtrips general questions and preserves inline imports after a stale push', async () => {
+      const result = await startServer({
+        preferredPort: await getAvailablePort(4966),
+        openBrowser: false,
+      });
+      try {
+        const general: DiffCommentThread = {
+          id: 'general',
+          scope: 'review',
+          isQuestion: true,
+          createdAt: isoNow,
+          updatedAt: isoNow,
+          messages: [
+            { id: 'root', body: 'Review-wide discussion', createdAt: isoNow, updatedAt: isoNow },
+          ],
+        };
+        expect((await postThreads(result.port, [general])).ok).toBe(true);
+        const first = await getSession(result.port);
+        expect(first.threads).toEqual([general]);
+        const imported = await fetch(`http://localhost:${result.port}/api/comment-imports`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([
+            {
+              type: 'thread',
+              filePath: 'src/a.ts',
+              position: { side: 'new', line: 1 },
+              body: 'Inline comment',
+            },
+          ]),
+        });
+        expect(imported.ok).toBe(true);
+        const replied: DiffCommentThread = {
+          ...general,
+          messages: [
+            ...general.messages,
+            { id: 'reply', body: 'General reply', createdAt: isoNow, updatedAt: isoNow },
+          ],
+        };
+        expect((await postThreads(result.port, [replied], first.version)).ok).toBe(true);
+        const final = await getSession(result.port);
+        expect(final.threads).toHaveLength(2);
+        expect(final.threads.find((thread) => thread.id === 'general')).toEqual(replied);
+        const output = await fetch(`http://localhost:${result.port}/api/comments-output`);
+        const text = await output.text();
+        expect(text).toContain("Review conversation\n[QUESTION — answer, don't change code]");
+        expect(text).toContain('General reply');
+        expect(text).toContain('src/a.ts');
+        expect(text).not.toContain('<unknown file>');
+      } finally {
+        if (result.server)
+          await new Promise<void>((resolve) => result.server!.close(() => resolve()));
+      }
+    });
+
+    it('retains question labels when normalizing display-style inline threads', async () => {
+      const result = await startServer({
+        preferredPort: await getAvailablePort(4966),
+        openBrowser: false,
+      });
+      try {
+        const { id, createdAt, updatedAt, messages } = makeThread(
+          'inline-question',
+          'src/a.ts',
+          3,
+          'Why here?',
+        );
+        const displayThread = {
+          id,
+          createdAt,
+          updatedAt,
+          messages,
+          file: 'src/a.ts',
+          line: 3,
+          side: 'new',
+          isQuestion: true,
+        };
+        expect((await postThreads(result.port, [displayThread])).ok).toBe(true);
+        expect((await getSession(result.port)).threads[0]).toMatchObject({
+          filePath: 'src/a.ts',
+          isQuestion: true,
+        });
+        const output = await fetch(`http://localhost:${result.port}/api/comments-output`);
+        expect(await output.text()).toContain(
+          "src/a.ts:L3\n[QUESTION — answer, don't change code]",
+        );
+      } finally {
+        if (result.server)
+          await new Promise<void>((resolve) => result.server!.close(() => resolve()));
+      }
+    });
 
     it('merges concurrent agent additions instead of clobbering on a stale push', async () => {
       const port = await getAvailablePort(4966);

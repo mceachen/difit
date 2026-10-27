@@ -4,12 +4,14 @@ import { useHotkeys, useHotkeysContext } from 'react-hotkeys-hook';
 
 import type { CommentThread } from '../../types/diff';
 
+import { CommentForm, type CommentSubmitOptions } from './CommentForm';
 import { CommentThreadCard } from './CommentThreadCard';
 import type { AppearanceSettings } from './SettingsModal';
 
 interface CommentsListModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onAddGeneralComment?: (body: string, options: CommentSubmitOptions) => Promise<void>;
   onNavigate: (thread: CommentThread) => void;
   comments: CommentThread[];
   showAuthorBadges?: boolean;
@@ -25,6 +27,7 @@ interface CommentsListModalProps {
 export function CommentsListModal({
   isOpen,
   onClose,
+  onAddGeneralComment,
   onNavigate,
   comments,
   showAuthorBadges = false,
@@ -37,39 +40,57 @@ export function CommentsListModal({
   syntaxTheme,
 }: CommentsListModalProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [generalDraft, setGeneralDraft] = useState({ body: '', isQuestion: false });
   const commentRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const { enableScope, disableScope } = useHotkeysContext();
 
+  useEffect(() => {
+    if (isOpen) dialogRef.current?.focus();
+  }, [isOpen]);
+
   const sortedThreads = [...comments].sort((a, b) => {
-    const fileCompare = a.file.localeCompare(b.file);
+    const fileCompare = (a.file ?? '').localeCompare(b.file ?? '');
     if (fileCompare !== 0) return fileCompare;
 
     const aLine = Array.isArray(a.line) ? a.line[0] : a.line;
     const bLine = Array.isArray(b.line) ? b.line[0] : b.line;
-    if (aLine !== bLine) return aLine - bLine;
+    if (aLine !== bLine) return (aLine ?? 0) - (bLine ?? 0);
 
     return a.createdAt.localeCompare(b.createdAt);
   });
 
+  useEffect(() => {
+    setSelectedIndex((index) => Math.max(0, Math.min(index, sortedThreads.length - 1)));
+  }, [sortedThreads.length]);
+
   const handleThreadClick = useCallback(
     (thread: CommentThread) => {
+      if (thread.scope === 'review') return;
       onNavigate(thread);
       onClose();
     },
     [onClose, onNavigate],
   );
 
+  const handleRemoveThread = useCallback(
+    (threadId: string) => {
+      onRemoveThread(threadId);
+      if (selectedIndex >= sortedThreads.length - 1 && selectedIndex > 0) {
+        setSelectedIndex(selectedIndex - 1);
+      }
+    },
+    [onRemoveThread, selectedIndex, sortedThreads.length],
+  );
+
   const handleDeleteThread = useCallback(
     (thread: CommentThread) => {
       const preview = thread.messages[0]?.body || '';
       if (confirm(`Resolve this thread?\n\n"${preview}"`)) {
-        onRemoveThread(thread.id);
-        if (selectedIndex >= sortedThreads.length - 1 && selectedIndex > 0) {
-          setSelectedIndex(selectedIndex - 1);
-        }
+        handleRemoveThread(thread.id);
       }
     },
-    [onRemoveThread, selectedIndex, sortedThreads.length],
+    [handleRemoveThread],
   );
 
   useEffect(() => {
@@ -108,7 +129,12 @@ export function CommentsListModal({
         handleThreadClick(sortedThreads[selectedIndex]);
       }
     },
-    hotkeyOptions,
+    {
+      ...hotkeyOptions,
+      ignoreEventWhen: (event: KeyboardEvent) =>
+        event.target instanceof Element &&
+        event.target.closest('button, a, [role="button"]') !== null,
+    },
     [handleThreadClick, selectedIndex, sortedThreads],
   );
 
@@ -134,16 +160,25 @@ export function CommentsListModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-end">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative max-h-[80vh] w-full max-w-4xl overflow-hidden rounded-lg border border-github-border bg-github-bg-primary shadow-lg">
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="conversation-title"
+        className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden border border-github-border bg-github-bg-primary shadow-lg"
+      >
         <div className="sticky top-0 border-b border-github-border bg-github-bg-primary px-6 py-4">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-github-text-primary">All Comments</h2>
+            <h2 id="conversation-title" className="text-lg font-semibold text-github-text-primary">
+              Conversation
+            </h2>
             <button
               onClick={onClose}
               className="text-github-text-secondary transition-colors hover:text-github-text-primary"
-              aria-label="Close comments list"
+              aria-label="Close conversation"
             >
               <X size={20} />
             </button>
@@ -156,8 +191,45 @@ export function CommentsListModal({
           </div>
         </div>
 
-        <div className="max-h-[calc(80vh-120px)] overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="p-6">
+            {onAddGeneralComment && (
+              <div className="mb-6">
+                <CommentForm
+                  embedded
+                  submitLabel="Send"
+                  value={generalDraft.body}
+                  onChange={(nextBody) =>
+                    setGeneralDraft((current) => {
+                      const body =
+                        typeof nextBody === 'function' ? nextBody(current.body) : nextBody;
+                      return body === current.body ? current : { ...current, body };
+                    })
+                  }
+                  showQuestionToggle
+                  questionValue={generalDraft.isQuestion}
+                  onQuestionChange={(isQuestion) =>
+                    setGeneralDraft((current) => ({ ...current, isQuestion }))
+                  }
+                  dismissOnOutsideClick={false}
+                  autoFocus={false}
+                  title="General comment or question"
+                  placeholder="Comment or ask about this review…"
+                  onSubmit={async (body, options) => {
+                    const submittedDraft = generalDraft;
+                    await onAddGeneralComment(body, options);
+                    setGeneralDraft((current) =>
+                      current === submittedDraft ? { body: '', isQuestion: false } : current,
+                    );
+                  }}
+                  onCancel={() => {
+                    setGeneralDraft({ body: '', isQuestion: false });
+                    onClose();
+                  }}
+                />
+              </div>
+            )}
+
             {sortedThreads.length === 0 ? (
               <p className="text-center text-github-text-secondary">No comments yet</p>
             ) : (
@@ -174,13 +246,8 @@ export function CommentsListModal({
                       <CommentThreadCard
                         thread={thread}
                         showAuthorBadges={showAuthorBadges}
-                        confirmRootAction={false}
                         onGeneratePrompt={onGenerateThreadPrompt}
-                        onRemoveThread={(threadId) => {
-                          if (threadId === thread.id) {
-                            handleDeleteThread(thread);
-                          }
-                        }}
+                        onRemoveThread={handleRemoveThread}
                         onReplyToThread={onReplyToThread}
                         onRemoveMessage={onRemoveMessage}
                         onUpdateMessage={onUpdateMessage}

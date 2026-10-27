@@ -110,13 +110,10 @@ export interface DiffCommentMessage {
 }
 
 // New data structures for enhanced comment and viewed state management
-export interface DiffCommentThread {
+interface CommentThreadBase {
   id: string;
-  filePath: string;
   createdAt: string; // ISO 8601 format
   updatedAt: string; // ISO 8601 format
-
-  position: DiffCommentPosition;
 
   codeSnapshot?: DiffCommentCodeSnapshot;
 
@@ -125,6 +122,12 @@ export interface DiffCommentThread {
 
   messages: DiffCommentMessage[];
 }
+
+export type DiffCommentThread = CommentThreadBase &
+  (
+    | { scope?: 'line'; filePath: string; position: DiffCommentPosition }
+    | { scope: 'review'; filePath?: never; position?: never }
+  );
 
 interface CommentImportBase {
   id?: string;
@@ -190,11 +193,8 @@ export interface DiffContextStorage {
   appliedCommentImportIds: string[];
 }
 
-export interface CommentThread {
+interface DisplayCommentThreadBase {
   id: string;
-  file: string;
-  line: LineNumber;
-  side?: DiffSide;
   createdAt: string;
   updatedAt: string;
   codeContent?: string;
@@ -202,6 +202,12 @@ export interface CommentThread {
   isQuestion?: boolean;
   messages: DiffCommentMessage[];
 }
+
+export type CommentThread = DisplayCommentThreadBase &
+  (
+    | { scope?: 'line'; file: string; line: LineNumber; side?: DiffSide }
+    | { scope: 'review'; file?: never; line?: never; side?: never }
+  );
 
 // Revision selector types
 interface RevisionOption {

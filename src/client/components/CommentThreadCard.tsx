@@ -305,7 +305,7 @@ export function CommentThreadCard({
               color: 'var(--color-yellow-path-text)',
             }}
           >
-            {thread.file}:{lineLabel}
+            {thread.scope === 'review' ? 'Review conversation' : `${thread.file}:${lineLabel}`}
           </span>
           {thread.isQuestion && (
             <span

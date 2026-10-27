@@ -4,7 +4,9 @@ import type { DiffCommentThread, DiffFile, DiffLine } from '../../types/diff';
 
 import { buildFileLineIndex, isThreadOutdated } from './outdatedComments';
 
-const buildThread = (overrides: Partial<DiffCommentThread> = {}): DiffCommentThread => ({
+const buildThread = (
+  overrides: Partial<Extract<DiffCommentThread, { filePath: string }>> = {},
+): DiffCommentThread => ({
   id: 'thread-1',
   filePath: 'src/app.ts',
   createdAt: '2026-01-01T00:00:00Z',

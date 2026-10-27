@@ -54,6 +54,65 @@ describe('useDiffComments', () => {
     mockDiffContextData = null;
   });
 
+  it('persists review-wide discussions and replies without a file location', () => {
+    const { result, unmount } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+    act(() => result.current.addReviewThread('Why this approach?'));
+    const thread = result.current.threads[0]!;
+    expect(thread.scope).toBe('review');
+    expect(thread).not.toHaveProperty('filePath');
+    expect(thread).not.toHaveProperty('position');
+    expect(result.current.comments).toEqual([]);
+    act(() =>
+      result.current.replyToThread({ threadId: thread.id, body: 'Because it simplifies review.' }),
+    );
+    expect(result.current.generateThreadPrompt(thread.id)).toContain('Review conversation');
+    expect(result.current.generateAllCommentsPrompt()).toContain('Because it simplifies review.');
+    expect(mockDiffContextData!.threads[0]!.messages).toHaveLength(2);
+    unmount();
+    const reopened = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+    expect(reopened.result.current.threads[0]).toMatchObject({
+      scope: 'review',
+      messages: [{ body: 'Why this approach?' }, { body: 'Because it simplifies review.' }],
+    });
+  });
+
+  it.each(['review', 'line'] as const)(
+    'persists %s question labels through replies, reloads and toggles',
+    (scope) => {
+      const { result, unmount } = renderHook(() => useDiffComments('main', 'questions', 'abc123'));
+      act(() => {
+        if (scope === 'review') result.current.addReviewThread('Why?', { isQuestion: true });
+        else
+          result.current.addThread({
+            filePath: 'src/a.ts',
+            side: 'new',
+            line: 3,
+            body: 'Why?',
+            isQuestion: true,
+          });
+      });
+      const id = result.current.threads[0]!.id;
+      act(() => result.current.replyToThread({ threadId: id, body: 'Here is why.' }));
+      expect(result.current.generateThreadPrompt(id)).toContain(
+        "[QUESTION — answer, don't change code]",
+      );
+      expect(result.current.generateAllCommentsPrompt()).toContain(
+        "[QUESTION — answer, don't change code]",
+      );
+      unmount();
+      const reopened = renderHook(() => useDiffComments('main', 'questions', 'abc123'));
+      expect(reopened.result.current.threads[0]).toMatchObject({
+        isQuestion: true,
+        messages: [{ body: 'Why?' }, { body: 'Here is why.' }],
+      });
+      act(() => reopened.result.current.setThreadQuestion(id, false));
+      expect(reopened.result.current.generateThreadPrompt(id)).not.toContain('[QUESTION');
+      expect(mockDiffContextData!.threads[0]!.isQuestion).toBeFalsy();
+      act(() => reopened.result.current.setThreadQuestion(id, true));
+      expect(reopened.result.current.generateThreadPrompt(id)).toContain('[QUESTION');
+    },
+  );
+
   describe('generatePrompt', () => {
     it('should format single line comment correctly', () => {
       const { result } = renderHook(() => useDiffComments('main', 'feature-branch', 'abc123'));

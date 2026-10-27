@@ -81,6 +81,53 @@ describe('CommentsListModal', () => {
     vi.unstubAllGlobals();
   });
 
+  it('sends general comments alongside inline discussions without navigating', async () => {
+    const user = userEvent.setup();
+    const onAddGeneralComment = vi.fn();
+    const onNavigate = vi.fn();
+    const onClose = vi.fn();
+    const general: CommentThread = {
+      id: 'general',
+      scope: 'review',
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-02',
+      messages: [
+        {
+          id: 'general-msg',
+          body: 'Review-wide question',
+          author: 'User',
+          createdAt: '2024-01-01',
+          updatedAt: '2024-01-01',
+        },
+      ],
+    };
+    render(
+      <CommentsListModal
+        isOpen
+        onClose={onClose}
+        onNavigate={onNavigate}
+        comments={[...mockThreads, general]}
+        onRemoveThread={mockRemoveThread}
+        onGenerateThreadPrompt={mockGenerateThreadPrompt}
+        onReplyToThread={mockReplyToThread}
+        onRemoveMessage={mockRemoveMessage}
+        onUpdateMessage={mockUpdateMessage}
+        onAddGeneralComment={onAddGeneralComment}
+      />,
+      { wrapper },
+    );
+    await user.type(
+      screen.getByPlaceholderText('Comment or ask about this review…'),
+      'How does this work?',
+    );
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onAddGeneralComment).toHaveBeenCalledWith('How does this work?', { isQuestion: false });
+    expect(screen.getByText('First root comment')).toBeInTheDocument();
+    await user.click(screen.getByText('Review conversation'));
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('does not render when closed', () => {
     const { container } = render(
       <CommentsListModal
@@ -116,7 +163,7 @@ describe('CommentsListModal', () => {
       { wrapper },
     );
 
-    expect(screen.getByText('All Comments')).toBeInTheDocument();
+    expect(screen.getByText('Conversation')).toBeInTheDocument();
     expect(screen.getByText('First root comment')).toBeInTheDocument();
     expect(screen.getByText('First reply')).toBeInTheDocument();
     expect(screen.getByText('Second root comment')).toBeInTheDocument();
@@ -226,7 +273,7 @@ describe('CommentsListModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('uses the modal resolve handler from the resolve button', async () => {
+  it('resolves with one inline confirmation from the resolve button', async () => {
     const user = userEvent.setup();
     const confirmSpy = vi.fn(() => false);
     vi.stubGlobal('confirm', confirmSpy);
@@ -248,8 +295,10 @@ describe('CommentsListModal', () => {
 
     await user.click(screen.getAllByTitle('Resolve thread')[0]!);
 
-    expect(confirmSpy).toHaveBeenCalledWith('Resolve this thread?\n\n"First root comment"');
     expect(mockRemoveThread).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Resolve' }));
+    expect(mockRemoveThread).toHaveBeenCalledWith('thread-1');
+    expect(confirmSpy).not.toHaveBeenCalled();
   });
 
   it('shows empty state when there are no threads', () => {
