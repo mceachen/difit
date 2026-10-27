@@ -46,6 +46,14 @@ export interface DiffSelection {
   baseMode?: BaseMode;
 }
 
+export interface ReviewContext {
+  source: 'git' | 'stdin';
+  repositoryName?: string;
+  repositoryPath?: string;
+  workingDirectory: string;
+  hostname: string;
+}
+
 export interface DiffResponse {
   commit: string;
   files: DiffFile[];
@@ -59,6 +67,7 @@ export interface DiffResponse {
   requestedBaseMode?: BaseMode;
   clearComments?: boolean;
   repositoryId?: string;
+  reviewContext?: ReviewContext;
   commentImports?: CommentImport[];
   commentImportId?: string;
 }

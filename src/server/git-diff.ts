@@ -1,5 +1,5 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
-import { isAbsolute, resolve, sep } from 'path';
+import { basename, dirname, isAbsolute, resolve, sep } from 'path';
 
 import { validateDiffArguments, shortHash, createCommitRangeString } from '../cli/utils.js';
 import {
@@ -24,6 +24,20 @@ export class GitDiffParser {
   constructor(repoPath = process.cwd()) {
     this.repoPath = repoPath;
     this.git = simpleGit(repoPath);
+  }
+
+  async getRepositoryName(): Promise<string> {
+    try {
+      const commonDirectory = resolve(
+        this.repoPath,
+        (await this.git.revparse(['--git-common-dir'])).trim(),
+      );
+      // Linked worktrees share the original repository's name.
+      if (basename(commonDirectory) === '.git') return basename(dirname(commonDirectory));
+    } catch {
+      // Display context must not prevent a review if Git metadata is unavailable.
+    }
+    return basename(resolve(this.repoPath)) || resolve(this.repoPath);
   }
 
   private normalizeRepositoryRelativePath(filepath: string): string {

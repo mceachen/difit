@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { resolve } from 'path';
+import { simpleGit } from 'simple-git';
 
 import { GitDiffParser } from './git-diff';
 
@@ -57,6 +58,28 @@ describe('GitDiffParser', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe('getRepositoryName', () => {
+    beforeEach(() => {
+      parser = new GitDiffParser(TEST_REPO_PATH);
+    });
+    it.each([
+      ['.git', 'repo'],
+      [resolve('/projects/original/.git'), 'original'],
+      [resolve('/projects/parent/.git/modules/submodule'), 'repo'],
+    ])('uses Git metadata %s to identify the repository', async (commonDirectory, name) => {
+      const git = vi.mocked(simpleGit).mock.results.at(-1)!.value;
+      vi.mocked(git.revparse).mockResolvedValue(commonDirectory);
+      expect(await parser.getRepositoryName()).toBe(name);
+      expect(git.revparse).toHaveBeenCalledWith(['--git-common-dir']);
+    });
+
+    it('falls back to the reviewed directory if Git metadata cannot be read', async () => {
+      const git = vi.mocked(simpleGit).mock.results.at(-1)!.value;
+      vi.mocked(git.revparse).mockRejectedValue(new Error('unavailable'));
+      expect(await parser.getRepositoryName()).toBe('repo');
+    });
   });
 
   describe('getBlobContent', () => {

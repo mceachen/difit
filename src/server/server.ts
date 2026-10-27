@@ -2,6 +2,7 @@ import { toCommentThread } from '../utils/commentThreads.js';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { type Server } from 'http';
+import { hostname } from 'os';
 import { join, dirname, isAbsolute, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -40,6 +41,7 @@ import {
   type DiffSelection,
   type GeneratedStatusResponse,
   type RevisionsResponse,
+  type ReviewContext,
 } from '@/types/diff.js';
 import {
   createDiffSelection,
@@ -135,6 +137,14 @@ export async function startServer(
       ? createHash('sha256').update(serializeCommentImports(initialCommentImports)).digest('hex')
       : undefined;
   const parser = new GitDiffParser(repositoryPath);
+  const reviewContext: ReviewContext = {
+    source: options.stdinDiff ? 'stdin' : 'git',
+    ...(options.stdinDiff
+      ? {}
+      : { repositoryName: await parser.getRepositoryName(), repositoryPath }),
+    workingDirectory: process.cwd(),
+    hostname: hostname(),
+  };
   const fileWatcher = new FileWatcherService();
   const generatedStatusCache = new Map<
     string,
@@ -365,6 +375,7 @@ export async function startServer(
       requestedBaseMode,
       clearComments: options.clearComments,
       repositoryId,
+      reviewContext,
       commentImports: shouldIncludeCommentImports ? initialCommentImports : undefined,
       commentImportId: shouldIncludeCommentImports ? commentImportId : undefined,
     });

@@ -231,6 +231,26 @@ describe('App Component - Clear Comments Functionality', () => {
     expect(screen.getByRole('button', { name: 'Expand thread' })).toBeInTheDocument();
   });
 
+  it('shows server-provided repository context on mobile', async () => {
+    vi.mocked(useViewport).mockReturnValue({ isMobile: true, isDesktop: false });
+    mockFetch({
+      ...mockDiffResponse,
+      reviewContext: {
+        source: 'git',
+        repositoryName: 'example-project',
+        repositoryPath: '/worktrees/review',
+        workingDirectory: '/worktrees/review/src',
+        hostname: 'build-host',
+      },
+    });
+    renderApp();
+    expect(await screen.findByRole('region', { name: 'Review context' })).toBeVisible();
+    fireEvent.click(screen.getByText('Repository info'));
+    expect(screen.getByText('example-project')).toBeVisible();
+    expect(screen.getByText('Files changed (1)')).toBeVisible();
+    vi.mocked(useViewport).mockReturnValue({ isMobile: false, isDesktop: true });
+  });
+
   it('opens Conversation before any comments exist', async () => {
     mockComments = [];
     renderApp();

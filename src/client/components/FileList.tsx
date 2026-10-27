@@ -14,12 +14,18 @@ import {
 } from 'lucide-react';
 import { memo, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 
-import { type DiffFile, type CommentThread } from '../../types/diff';
+import {
+  type DiffFile,
+  type CommentThread,
+  type ReviewContext as ReviewContextData,
+} from '../../types/diff';
 import { isSafariBrowser } from '../utils/browser';
 
 import { Checkbox } from './Checkbox';
+import { ReviewContext } from './ReviewContext';
 
 interface FileListProps {
+  reviewContext?: ReviewContextData;
   files: DiffFile[];
   onScrollToFile: (path: string) => void;
   onFileSelected?: () => void;
@@ -154,6 +160,7 @@ function buildFileTree(files: DiffFile[]): TreeNode {
 }
 
 export const FileList = memo(function FileList({
+  reviewContext,
   files,
   onScrollToFile,
   onFileSelected,
@@ -497,6 +504,7 @@ export const FileList = memo(function FileList({
         style={stickyContainerStyle}
         ref={scrollContainerRef}
       >
+        <ReviewContext context={reviewContext} />
         {filteredFileTree.children?.map((child) => renderTreeNode(child))}
       </div>
     </div>

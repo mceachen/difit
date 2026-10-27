@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { hostname, tmpdir } from 'os';
+import { join, resolve } from 'path';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -41,6 +41,7 @@ vi.mock('./git-diff.js', () => {
       parserInstances.push(this);
     }
 
+    getRepositoryName = vi.fn().mockResolvedValue('sample-repository');
     validateCommit = vi.fn().mockResolvedValue(true);
     parseDiff = vi.fn().mockResolvedValue({
       targetCommit: 'abc123',
@@ -556,6 +557,27 @@ describe('Server Integration Tests', () => {
       expect(data).toHaveProperty('openInEditorAvailable', true);
       expect(data).toHaveProperty('requestedBaseCommitish', 'HEAD^');
       expect(data).toHaveProperty('requestedTargetCommitish', 'HEAD');
+      expect(data.reviewContext).toEqual({
+        source: 'git',
+        repositoryName: 'sample-repository',
+        repositoryPath: resolve(process.cwd()),
+        workingDirectory: process.cwd(),
+        hostname: hostname(),
+      });
+    });
+
+    it('identifies the reviewed worktree separately from the launch directory', async () => {
+      const repoPath = join(tmpdir(), 'different-review-worktree');
+      const result = await startServer({
+        selection: { targetCommitish: 'HEAD', baseCommitish: 'HEAD^' },
+        repoPath,
+        preferredPort: 9095,
+      });
+      servers.push(result.server);
+      const response = await fetch(`http://localhost:${result.port}/api/diff`);
+      const data = (await response.json()) as import('../types/diff.js').DiffResponse;
+      expect(data.reviewContext?.repositoryPath).toBe(repoPath);
+      expect(data.reviewContext?.workingDirectory).toBe(process.cwd());
     });
 
     it('GET /api/diff returns a JSON 500 on parse failure and does not poison subsequent requests', async () => {
@@ -1345,6 +1367,11 @@ describe('Server Integration Tests', () => {
 
       expect(response.ok).toBe(true);
       expect(data).toHaveProperty('openInEditorAvailable', false);
+      expect(data.reviewContext).toEqual({
+        source: 'stdin',
+        workingDirectory: process.cwd(),
+        hostname: hostname(),
+      });
     });
 
     it('GET /api/generated-status/* returns 400 for stdin diff', async () => {

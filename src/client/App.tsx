@@ -1434,6 +1434,7 @@ function App() {
               <div className="flex-1 overflow-y-auto">
                 <FileList
                   files={diffData.files}
+                  reviewContext={diffData.reviewContext}
                   onScrollToFile={scrollFileIntoDiffContainer}
                   onFileSelected={isMobile ? handleMobileFileSelected : undefined}
                   comments={normalizedThreads}
