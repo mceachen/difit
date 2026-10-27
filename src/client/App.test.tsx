@@ -585,13 +585,16 @@ describe('App Component - Ship it', () => {
     expect(screen.queryByRole('button', { name: 'LGTM' })).not.toBeInTheDocument();
   });
 
-  it('keeps the LGTM button clickable and toggles approval on and off', async () => {
+  it('keeps the LGTM image clickable and toggles approval on and off', async () => {
     mockFetch({ ...mockDiffResponse, shipIt: true });
 
     renderApp();
     const button = await screen.findByRole('button', { name: 'LGTM' });
     await waitFor(() => expect(button).toBeEnabled());
+    const icon = button.querySelector('img');
+    expect(icon).not.toBeNull();
     expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(button).toHaveClass('grayscale');
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -603,10 +606,14 @@ describe('App Component - Ship it', () => {
     });
     await waitFor(() => expect(button).toHaveAttribute('aria-pressed', 'true'));
     expect(button).toBeEnabled();
+    expect(button).toHaveClass('grayscale-0');
+    expect(button.querySelector('img')).toBe(icon);
     expect(screen.queryByText('Shipped')).not.toBeInTheDocument();
     fireEvent.click(button);
     await waitFor(() => expect(button).toHaveAttribute('aria-pressed', 'false'));
+    expect(button).toHaveClass('grayscale');
     expect(button).toBeEnabled();
+    expect(button.querySelector('img')).toBe(icon);
     expect(global.fetch).toHaveBeenCalledWith('/api/approval?base=HEAD%5E&target=HEAD', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

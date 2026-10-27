@@ -291,3 +291,7 @@ Use `--lgtm` (alias `--ship-it`) to show the opt-in LGTM approval toggle. Approv
 starts off, stays scoped to the displayed selection, and can be revoked while the
 review remains open. Conversation watchers receive approval changes immediately.
 See [the approval workflow](docs/agent-conversations.md).
+
+可选的 `--ship-it` 按钮使用了用户提供的
+[此视频](https://www.youtube.com/watch?v=3TNpOD6bov8)中的 LGTM 截图。
+该图片的权利归各自权利人所有，不在本项目的 MIT 许可证范围内。
