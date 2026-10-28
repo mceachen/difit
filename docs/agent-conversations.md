@@ -89,10 +89,13 @@ to keep watching after ending a turn without such a host integration.
 
 The header's **Conversation** button opens a panel containing general and inline
 threads. The general composer accepts comments or questions about the whole review.
-**Send** posts immediately. Its optional intent selector offers Comment (default),
-Question, and Request change. Inline composers and replies use the same choices.
-Intent helps interpret the message; the body and existing authorization determine
-what the agent should do. Intent is not approval to commit, push, or publish.
+**Send** posts immediately. New comments, replies, and message edits share one
+Intent radio group: **Comment** (default) shares context without requesting a
+reply, **Change request** asks for a code change and follow-up, and **Question**
+asks for an explanation. The body and existing authorization determine what the
+agent should do; intent is not approval to commit, push, or publish. Explicit
+root-message intent takes precedence over the older thread-level question flag,
+which remains a fallback for saved threads without explicit intent.
 
 General threads and events have `scope: "review"` and omit file/line location.
 Use the event's review/thread/message IDs for status and replies just as for inline

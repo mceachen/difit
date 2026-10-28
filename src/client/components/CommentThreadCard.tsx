@@ -4,7 +4,6 @@ import {
   ChevronRight,
   Copy,
   Edit2,
-  HelpCircle,
   LoaderCircle,
   MessageSquare,
   Trash2,
@@ -16,7 +15,7 @@ import { useClickOutside } from '../hooks/useClickOutside';
 import { copyTextToClipboard } from '../utils/clipboard';
 
 import { CommentBodyRenderer } from './CommentBodyRenderer';
-import { CommentForm } from './CommentForm';
+import { CommentForm, type CommentSubmitOptions } from './CommentForm';
 import type { AppearanceSettings } from './SettingsModal';
 
 interface ThreadMessageItemProps {
@@ -26,7 +25,7 @@ interface ThreadMessageItemProps {
   syntaxTheme?: AppearanceSettings['syntaxTheme'];
   filename?: string;
   originalCode?: string;
-  onUpdate: (newBody: string) => void;
+  onUpdate: (newBody: string, intent: CommentIntent) => void;
   onResolveOrDelete: () => void;
   actionLabel: string;
   confirmPrompt?: string;
@@ -62,6 +61,7 @@ function ThreadMessageItem({
   const showAuthorHeader = showAuthorBadge && Boolean(message.author);
   const progress = message.origin !== 'agent' ? message.progress : undefined;
   const isUserAuthoredMessage = message.author?.trim() === 'User';
+  const intent = message.intent ?? 'comment';
 
   useClickOutside(confirmContainerRef, () => setPendingAction(null), isConfirming);
 
@@ -93,9 +93,10 @@ function ThreadMessageItem({
     setIsEditing(false);
   };
 
-  const handleSaveEdit = (nextBody: string) => {
-    if (nextBody !== message.body) {
-      onUpdate(nextBody);
+  const handleSaveEdit = (nextBody: string, options: CommentSubmitOptions) => {
+    const nextIntent = options.intent ?? 'comment';
+    if (nextBody !== message.body || nextIntent !== intent) {
+      onUpdate(nextBody, nextIntent);
     }
     setIsEditing(false);
     return Promise.resolve();
@@ -114,9 +115,13 @@ function ThreadMessageItem({
               </div>
             )}
 
-            {message.intent && message.intent !== 'comment' && (
+            {(message.intent || isUserAuthoredMessage) && (
               <span className="mb-2 inline-block rounded border border-github-border px-1.5 py-0.5 text-xs text-github-text-secondary">
-                {message.intent === 'question' ? 'Question' : 'Request change'}
+                {intent === 'question'
+                  ? 'Question'
+                  : intent === 'change'
+                    ? 'Change request'
+                    : 'Comment'}
               </span>
             )}
             {progress && (
@@ -189,7 +194,7 @@ function ThreadMessageItem({
               </div>
             ) : (
               <div className="flex shrink-0 items-start gap-2 pt-0.5">
-                {isUserAuthoredMessage && (
+                {(isUserAuthoredMessage || isRootMessage) && (
                   <button
                     type="button"
                     onClick={handleStartEdit}
@@ -242,6 +247,7 @@ function ThreadMessageItem({
           syntaxTheme={syntaxTheme}
           filename={filename}
           initialValue={message.body}
+          initialIntent={intent}
           embedded={true}
           title="Edit comment"
           submitLabel="Save"
@@ -261,8 +267,13 @@ interface CommentThreadCardProps {
   onRemoveThread?: (threadId: string) => void;
   onReplyToThread: (threadId: string, body: string, intent?: CommentIntent) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
-  onUpdateMessage: (threadId: string, messageId: string, newBody: string) => void;
-  onSetThreadQuestion?: (threadId: string, isQuestion: boolean) => void;
+  onUpdateMessage: (
+    threadId: string,
+    messageId: string,
+    newBody: string,
+    intent?: CommentIntent,
+  ) => void;
+
   onClick?: (e: React.MouseEvent) => void;
   syntaxTheme?: AppearanceSettings['syntaxTheme'];
 }
@@ -277,7 +288,7 @@ export function CommentThreadCard({
   onReplyToThread,
   onRemoveMessage,
   onUpdateMessage,
-  onSetThreadQuestion,
+
   onClick,
   syntaxTheme,
 }: CommentThreadCardProps) {
@@ -355,14 +366,6 @@ export function CommentThreadCard({
               </button>
             </>
           )}
-          {thread.isQuestion && (
-            <span
-              className="inline-flex h-5 shrink-0 items-center rounded-full border border-blue-500/60 px-2 text-[10px] font-medium text-blue-500"
-              title="The AI will be asked to answer this instead of changing code"
-            >
-              Question
-            </span>
-          )}
           {thread.isOutdated && (
             <span
               className="inline-flex h-5 shrink-0 items-center rounded-full border border-github-text-muted px-2 text-[10px] font-medium text-github-text-muted"
@@ -394,29 +397,6 @@ export function CommentThreadCard({
         </div>
         {!isCollapsed && (
           <div className="flex items-center gap-2">
-            {onSetThreadQuestion && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSetThreadQuestion(thread.id, !thread.isQuestion);
-                }}
-                aria-pressed={Boolean(thread.isQuestion)}
-                className={`rounded border p-1 transition-all hover:bg-github-bg-primary ${
-                  thread.isQuestion
-                    ? 'border-blue-500/60 text-blue-500'
-                    : 'border-github-border text-github-text-secondary'
-                }`}
-                title={
-                  thread.isQuestion ? 'Change to a normal comment' : 'Mark as a question for the AI'
-                }
-                aria-label={
-                  thread.isQuestion ? 'Change to a normal comment' : 'Mark as a question for the AI'
-                }
-              >
-                <HelpCircle size={14} />
-              </button>
-            )}
             <button
               type="button"
               onClick={handleCopyThread}
@@ -440,13 +420,18 @@ export function CommentThreadCard({
       {!isCollapsed && (
         <div className="space-y-3">
           <ThreadMessageItem
-            message={rootMessage}
+            message={{
+              ...rootMessage,
+              intent: rootMessage.intent ?? (thread.isQuestion ? 'question' : undefined),
+            }}
             isRootMessage={true}
             showAuthorBadge={showAuthorBadges}
             syntaxTheme={syntaxTheme}
             filename={thread.file}
             originalCode={thread.codeContent}
-            onUpdate={(newBody) => onUpdateMessage(thread.id, rootMessage.id, newBody)}
+            onUpdate={(newBody, intent) =>
+              onUpdateMessage(thread.id, rootMessage.id, newBody, intent)
+            }
             onResolveOrDelete={() => onToggleThreadResolved(thread.id)}
             actionLabel={thread.resolution?.resolved ? 'Reopen thread' : 'Resolve thread'}
             confirmLabel={thread.resolution?.resolved ? 'Reopen' : 'Resolve'}
@@ -464,7 +449,9 @@ export function CommentThreadCard({
                 syntaxTheme={syntaxTheme}
                 filename={thread.file}
                 originalCode={thread.codeContent}
-                onUpdate={(newBody) => onUpdateMessage(thread.id, message.id, newBody)}
+                onUpdate={(newBody, intent) =>
+                  onUpdateMessage(thread.id, message.id, newBody, intent)
+                }
                 onResolveOrDelete={() => onRemoveMessage(thread.id, message.id)}
                 actionLabel="Delete reply"
                 confirmLabel="Delete"

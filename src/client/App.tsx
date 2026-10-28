@@ -200,7 +200,6 @@ function App() {
     removeThread,
     removeMessage,
     updateMessage,
-    setThreadQuestion,
     clearAllComments,
     generateThreadPrompt,
     generateAllCommentsPrompt,
@@ -1581,7 +1580,6 @@ function App() {
                       onReplyToThread={handleReplyToThread}
                       onRemoveMessage={removeMessage}
                       onUpdateMessage={updateMessage}
-                      onSetThreadQuestion={setThreadQuestion}
                       onOpenInEditor={canOpenInEditor ? handleOpenInEditor : undefined}
                       syntaxTheme={settings.syntaxTheme}
                       baseCommitish={diffData.baseCommitish}
@@ -1669,7 +1667,6 @@ function App() {
           onReplyToThread={handleReplyToThread}
           onRemoveMessage={removeMessage}
           onUpdateMessage={updateMessage}
-          onSetThreadQuestion={setThreadQuestion}
           syntaxTheme={settings.syntaxTheme}
         />
       </div>

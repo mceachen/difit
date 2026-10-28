@@ -14,7 +14,8 @@ This fork builds on Yoshiko's diff viewer with a review workflow for coding agen
   when the agent reports its activity. This does not wake an idle agent automatically.
 - **Reversible LGTM:** approval stays visible and can be revoked. Conversations
   and the approval toggle are enabled by default; approval starts off.
-- **Questions and retained discussions:** label a thread as a question, resolve
+- **Intent and retained discussions:** choose Comment, Change request, or Question
+  in one radio group, resolve
   and reopen it without losing the history, or explicitly delete it.
 - **Repository information:** expand the Repository info node in the file tree to
   see the reviewed repository, worktree, server, and launch directory. The browser

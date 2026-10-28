@@ -53,7 +53,12 @@ interface UseDiffCommentsReturn {
   removeThread: (threadId: string) => void;
   updateComment: (commentId: string, newBody: string) => void;
   removeMessage: (threadId: string, messageId: string) => void;
-  updateMessage: (threadId: string, messageId: string, newBody: string) => void;
+  updateMessage: (
+    threadId: string,
+    messageId: string,
+    newBody: string,
+    intent?: CommentIntent,
+  ) => void;
   setThreadQuestion: (threadId: string, isQuestion: boolean) => void;
   clearAllComments: (options?: { resetAppliedCommentImportIds?: boolean }) => void;
   applyCommentImports: (imports: CommentImport[], importId: string) => string[];
@@ -76,6 +81,15 @@ function normalizeRootComment(thread: DiffCommentThread): LegacyDiffComment | nu
     position: thread.position,
     codeSnapshot: thread.codeSnapshot,
   };
+}
+
+function normalizeQuestionFlags(threads: DiffCommentThread[]): DiffCommentThread[] {
+  return threads.map((thread) => {
+    const intent = thread.messages[0]?.intent;
+    if (intent === undefined) return thread;
+    const isQuestion = intent === 'question' || undefined;
+    return thread.isQuestion === isQuestion ? thread : { ...thread, isQuestion };
+  });
 }
 
 function withoutProgress(threads: DiffCommentThread[]): DiffCommentThread[] {
@@ -147,8 +161,20 @@ export function useDiffComments(
         repositoryId,
         baseMode,
       );
+    const normalizedThreads = normalizeQuestionFlags(loadedThreads);
+    if (normalizedThreads.some((thread, index) => thread !== loadedThreads[index])) {
+      storageService.saveCommentThreads(
+        baseCommitish,
+        targetCommitish,
+        withoutProgress(normalizedThreads),
+        currentCommitHash,
+        branchToHash,
+        repositoryId,
+        baseMode,
+      );
+    }
     // Persisted activity belongs to an earlier connection, never the current agent.
-    setThreads(withoutProgress(loadedThreads));
+    setThreads(withoutProgress(normalizedThreads));
     setHasLoadedComments(true);
   }, [
     baseCommitish,
@@ -164,16 +190,17 @@ export function useDiffComments(
     (newThreads: DiffCommentThread[]) => {
       if (!baseCommitish || !targetCommitish) return;
 
+      const normalizedThreads = normalizeQuestionFlags(newThreads);
       storageService.saveCommentThreads(
         baseCommitish,
         targetCommitish,
-        withoutProgress(newThreads),
+        withoutProgress(normalizedThreads),
         currentCommitHash,
         branchToHash,
         repositoryId,
         baseMode,
       );
-      setThreads(newThreads);
+      setThreads(normalizedThreads);
       setHasLoadedComments(true);
     },
     [baseCommitish, targetCommitish, currentCommitHash, branchToHash, repositoryId, baseMode],
@@ -203,7 +230,9 @@ export function useDiffComments(
           content: '',
           language: getLanguageFromPath(params.filePath),
         },
-        ...(params.isQuestion || params.intent === 'question' ? { isQuestion: true } : {}),
+        ...((params.intent === undefined ? params.isQuestion : params.intent === 'question')
+          ? { isQuestion: true }
+          : {}),
         messages: [
           {
             id: threadId,
@@ -232,7 +261,9 @@ export function useDiffComments(
         {
           id,
           scope: 'review',
-          isQuestion: options?.isQuestion || options?.intent === 'question' || undefined,
+          isQuestion:
+            (options?.intent === undefined ? options?.isQuestion : options.intent === 'question') ||
+            undefined,
           createdAt: now,
           updatedAt: now,
           messages: [
@@ -354,16 +385,25 @@ export function useDiffComments(
   );
 
   const updateMessage = useCallback(
-    (threadId: string, messageId: string, newBody: string) => {
+    (threadId: string, messageId: string, newBody: string, intent?: CommentIntent) => {
       const now = new Date().toISOString();
       const newThreads = threads.map((thread) =>
         thread.id === threadId
           ? {
               ...thread,
               updatedAt: now,
+              ...(intent !== undefined && thread.messages[0]?.id === messageId
+                ? { isQuestion: intent === 'question' || undefined }
+                : {}),
               messages: thread.messages.map((message) =>
                 message.id === messageId
-                  ? { ...message, body: newBody, updatedAt: now, progress: undefined }
+                  ? {
+                      ...message,
+                      body: newBody,
+                      ...(intent === undefined ? {} : { intent, origin: 'user' as const }),
+                      updatedAt: now,
+                      progress: undefined,
+                    }
                   : message,
               ),
             }
@@ -472,14 +512,19 @@ export function useDiffComments(
       }
 
       if (existingData.appliedCommentImportIds.includes(importId)) {
-        setThreads(existingData.threads);
+        const normalizedThreads = normalizeQuestionFlags(existingData.threads);
+        if (normalizedThreads.some((thread, index) => thread !== existingData.threads[index])) {
+          saveThreads(normalizedThreads);
+        } else {
+          setThreads(normalizedThreads);
+        }
         return [];
       }
 
       const merged = mergeCommentImports(existingData.threads, imports);
       const nextData: DiffContextStorage = {
         ...existingData,
-        threads: merged.threads,
+        threads: withoutProgress(normalizeQuestionFlags(merged.threads)),
         appliedCommentImportIds: [...existingData.appliedCommentImportIds, importId],
       };
 
@@ -492,7 +537,7 @@ export function useDiffComments(
         repositoryId,
         baseMode,
       );
-      setThreads(merged.threads);
+      setThreads(normalizeQuestionFlags(merged.threads));
       return merged.warnings;
     },
     [
@@ -504,6 +549,7 @@ export function useDiffComments(
       loadDiffContextData,
       repositoryId,
       baseMode,
+      saveThreads,
     ],
   );
 

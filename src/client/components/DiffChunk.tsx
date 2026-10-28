@@ -41,8 +41,13 @@ interface DiffChunkProps {
   onRemoveThread?: (threadId: string) => void;
   onReplyToThread: (threadId: string, body: string, intent?: CommentIntent) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
-  onUpdateMessage: (threadId: string, messageId: string, newBody: string) => void;
-  onSetThreadQuestion?: (threadId: string, isQuestion: boolean) => void;
+  onUpdateMessage: (
+    threadId: string,
+    messageId: string,
+    newBody: string,
+    intent?: CommentIntent,
+  ) => void;
+
   mode?: DiffViewMode;
   syntaxTheme?: AppearanceSettings['syntaxTheme'];
   cursor?: CursorPosition | null;
@@ -75,7 +80,7 @@ export const DiffChunk = memo(function DiffChunk({
   onReplyToThread,
   onRemoveMessage,
   onUpdateMessage,
-  onSetThreadQuestion,
+
   mode = DEFAULT_DIFF_VIEW_MODE,
   syntaxTheme,
   cursor = null,
@@ -412,7 +417,6 @@ export const DiffChunk = memo(function DiffChunk({
         onReplyToThread={onReplyToThread}
         onRemoveMessage={onRemoveMessage}
         onUpdateMessage={onUpdateMessage}
-        onSetThreadQuestion={onSetThreadQuestion}
         onOpenInEditor={onOpenInEditor}
         syntaxTheme={syntaxTheme}
         cursor={cursor}
@@ -544,7 +548,6 @@ export const DiffChunk = memo(function DiffChunk({
                               onReplyToThread={onReplyToThread}
                               onRemoveMessage={onRemoveMessage}
                               onUpdateMessage={onUpdateMessage}
-                              onSetThreadQuestion={onSetThreadQuestion}
                               syntaxTheme={syntaxTheme}
                             />
                           </div>
@@ -577,7 +580,6 @@ export const DiffChunk = memo(function DiffChunk({
                               selectedCode={getSelectedCodeContent()}
                               syntaxTheme={syntaxTheme}
                               filename={filename}
-                              showQuestionToggle={true}
                             />
                           </div>
                         </div>

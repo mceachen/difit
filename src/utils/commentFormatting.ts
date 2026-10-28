@@ -137,7 +137,8 @@ export function formatCommentThreadPrompt(thread: CommentThread): string {
       ? 'Review conversation'
       : formatCommentLocation(thread.file, thread.line, thread.side),
   ];
-  if (thread.isQuestion) {
+  const rootIntent = thread.messages[0]?.intent;
+  if (rootIntent === 'question' || (rootIntent === undefined && thread.isQuestion)) {
     sections.push(QUESTION_PROMPT_MARKER);
   }
 
@@ -148,7 +149,7 @@ export function formatCommentThreadPrompt(thread: CommentThread): string {
       sections.push(`Reply ${index} (${authorLabel})`);
     }
     if (message.intent && message.intent !== 'comment')
-      sections.push(`Intent: ${message.intent === 'question' ? 'Question' : 'Request change'}`);
+      sections.push(`Intent: ${message.intent === 'question' ? 'Question' : 'Change request'}`);
     sections.push(formatCommentContent(message.body, thread.codeContent));
   });
 

@@ -141,7 +141,7 @@ describe('CommentThreadCard', () => {
     expect(screen.queryByTitle('Delete reply')).not.toBeInTheDocument();
   });
 
-  it('keeps resolve available for root comments even when not authored by the user', () => {
+  it('allows resolving and updating intent on imported root comments', () => {
     render(
       <CommentThreadCard
         thread={{
@@ -162,7 +162,7 @@ describe('CommentThreadCard', () => {
     );
 
     expect(screen.getByTitle('Resolve thread')).toBeInTheDocument();
-    expect(screen.queryByTitle('Edit message')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Edit message')).toBeInTheDocument();
   });
 
   it('shows an inline confirmation before resolving a root comment by default', async () => {
@@ -450,7 +450,7 @@ describe('CommentThreadCard', () => {
     await user.type(textarea, 'A new reply');
     await user.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(onReplyToThread).toHaveBeenCalledWith('thread-1', 'A new reply', undefined);
+    expect(onReplyToThread).toHaveBeenCalledWith('thread-1', 'A new reply', 'comment');
     // Collapses back to the trigger after submitting
     expect(screen.getByRole('button', { name: 'Write a reply...' })).toBeInTheDocument();
   });
@@ -538,42 +538,33 @@ describe('CommentThreadCard', () => {
     expect(onToggleThreadResolved).not.toHaveBeenCalled();
   });
 
-  it('toggles a thread between a comment and a question', async () => {
+  it('edits legacy question intent through the same group without a header toggle', async () => {
     const user = userEvent.setup();
-    const onSetThreadQuestion = vi.fn();
-
-    const { rerender } = render(
+    const onUpdateMessage = vi.fn();
+    const root = mockThread.messages[0]!;
+    render(
       <CommentThreadCard
-        thread={mockThread}
+        thread={{
+          ...mockThread,
+          isQuestion: true,
+          messages: [{ ...root, author: 'Reviewer', origin: 'agent' }],
+        }}
         onGeneratePrompt={() => 'thread prompt'}
         onToggleThreadResolved={vi.fn()}
-        onRemoveThread={vi.fn()}
-        onReplyToThread={vi.fn().mockResolvedValue(undefined)}
+        onReplyToThread={vi.fn()}
         onRemoveMessage={vi.fn()}
-        onUpdateMessage={vi.fn()}
-        onSetThreadQuestion={onSetThreadQuestion}
+        onUpdateMessage={onUpdateMessage}
       />,
     );
-
-    expect(screen.queryByText('Question')).not.toBeInTheDocument();
-    await user.click(screen.getByTitle('Mark as a question for the AI'));
-    expect(onSetThreadQuestion).toHaveBeenCalledWith('thread-1', true);
-
-    rerender(
-      <CommentThreadCard
-        thread={{ ...mockThread, isQuestion: true }}
-        onGeneratePrompt={() => 'thread prompt'}
-        onToggleThreadResolved={vi.fn()}
-        onRemoveThread={vi.fn()}
-        onReplyToThread={vi.fn().mockResolvedValue(undefined)}
-        onRemoveMessage={vi.fn()}
-        onUpdateMessage={vi.fn()}
-        onSetThreadQuestion={onSetThreadQuestion}
-      />,
-    );
-
-    expect(screen.getByText('Question')).toBeInTheDocument();
-    await user.click(screen.getByTitle('Change to a normal comment'));
-    expect(onSetThreadQuestion).toHaveBeenCalledWith('thread-1', false);
+    expect(screen.getAllByText('Question')).toHaveLength(1);
+    expect(
+      screen.queryByRole('button', { name: 'Change to a normal comment' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    await user.click(screen.getByTitle('Edit message'));
+    expect(screen.getByRole('radio', { name: 'Question' })).toBeChecked();
+    await user.click(screen.getByRole('radio', { name: 'Comment' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onUpdateMessage).toHaveBeenCalledWith('thread-1', root.id, root.body, 'comment');
   });
 });

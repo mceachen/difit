@@ -24,7 +24,7 @@ export function TextDiffViewer({
   onReplyToThread,
   onRemoveMessage,
   onUpdateMessage,
-  onSetThreadQuestion,
+
   onLineClick,
   onOpenInEditor,
   commentTrigger,
@@ -112,7 +112,6 @@ export function TextDiffViewer({
                 onReplyToThread={onReplyToThread}
                 onRemoveMessage={onRemoveMessage}
                 onUpdateMessage={onUpdateMessage}
-                onSetThreadQuestion={onSetThreadQuestion}
                 onOpenInEditor={onOpenInEditor}
                 mode={diffMode}
                 syntaxTheme={syntaxTheme}

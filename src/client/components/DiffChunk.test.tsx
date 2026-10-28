@@ -75,7 +75,7 @@ describe('DiffChunk range comments', () => {
         'Please revisit this range',
         ['const first = 1;', 'const second = 2;', 'const third = 3;'].join('\n'),
         'new',
-        { isQuestion: false },
+        { isQuestion: false, intent: 'comment' },
       );
     });
   });
@@ -112,7 +112,7 @@ describe('DiffChunk range comments', () => {
         'Please revisit this range',
         ['const first = 1;', 'const second = 2;', 'const third = 3;'].join('\n'),
         'new',
-        { isQuestion: false },
+        { isQuestion: false, intent: 'comment' },
       );
     });
   });
@@ -146,6 +146,7 @@ describe('DiffChunk range comments', () => {
     await waitFor(() => {
       expect(onAddComment).toHaveBeenCalledWith(12, 'Single line only', 'const third = 3;', 'new', {
         isQuestion: false,
+        intent: 'comment',
       });
     });
   });
@@ -186,7 +187,7 @@ describe('DiffChunk range comments', () => {
         'Please revisit this range',
         ['const first = 1;', 'const second = 2;', 'const third = 3;'].join('\n'),
         'new',
-        { isQuestion: false },
+        { isQuestion: false, intent: 'comment' },
       );
     });
   });
@@ -226,7 +227,7 @@ describe('DiffChunk range comments', () => {
         'Please revisit this range',
         ['const first = 1;', 'const second = 2;', 'const third = 3;'].join('\n'),
         'new',
-        { isQuestion: false },
+        { isQuestion: false, intent: 'comment' },
       );
     });
   });

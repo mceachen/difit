@@ -1,10 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 
 import type { CommentIntent } from '../../types/diff';
 
 import { CommentBodyRenderer, hasSuggestionInBody } from './CommentBodyRenderer';
 import type { AppearanceSettings } from './SettingsModal';
 import { SuggestionTemplateButton } from './SuggestionTemplateButton';
+import { Tooltip } from './Tooltip';
 
 export interface CommentSubmitOptions {
   isQuestion: boolean;
@@ -26,12 +27,9 @@ interface CommentFormProps {
   placeholder?: string;
   autoFocus?: boolean;
   dismissOnOutsideClick?: boolean;
-  showIntent?: boolean;
+  initialIntent?: CommentIntent;
   intentValue?: CommentIntent;
   onIntentChange?: (intent: CommentIntent) => void;
-  showQuestionToggle?: boolean;
-  questionValue?: boolean;
-  onQuestionChange?: (isQuestion: boolean) => void;
 }
 
 type CommentFormMode = 'edit' | 'preview';
@@ -48,15 +46,12 @@ export function CommentForm({
   embedded = false,
   title = 'Add a comment',
   submitLabel = 'Send',
-  showIntent = !initialValue,
+  initialIntent = 'comment',
   intentValue,
   onIntentChange,
   autoFocus = true,
   dismissOnOutsideClick = true,
   placeholder = 'Leave a comment...',
-  showQuestionToggle = false,
-  questionValue,
-  onQuestionChange,
 }: CommentFormProps) {
   const [localBody, setLocalBody] = useState(initialValue);
   const body = value ?? localBody;
@@ -64,10 +59,9 @@ export function CommentForm({
     setLocalBody(nextBody);
     onChange?.(nextBody);
   };
-  const [localIntent, setLocalIntent] = useState<CommentIntent>('comment');
+  const [localIntent, setLocalIntent] = useState<CommentIntent>(initialIntent);
   const intent = intentValue ?? localIntent;
-  const [localIsQuestion, setLocalIsQuestion] = useState(false);
-  const isQuestion = questionValue ?? localIsQuestion;
+  const intentGroupId = useId();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mode, setMode] = useState<CommentFormMode>('edit');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -82,13 +76,12 @@ export function CommentForm({
     setIsSubmitting(true);
     try {
       await onSubmit(body.trim(), {
-        isQuestion: showQuestionToggle && isQuestion,
-        ...(intent !== 'comment' ? { intent } : {}),
+        isQuestion: intent === 'question',
+        intent,
       });
       if (value === undefined) {
         setBody((currentBody) => (currentBody === body ? '' : currentBody));
       }
-      setLocalIsQuestion(false);
       setLocalIntent('comment');
       setMode('edit');
     } catch (error) {
@@ -122,26 +115,40 @@ export function CommentForm({
       data-empty={!body.trim()}
       data-dismiss-on-outside-click={dismissOnOutsideClick}
     >
-      {showIntent && (
-        <label className="mb-2 flex items-center gap-2 text-xs text-github-text-secondary">
-          Intent
-          <select
-            aria-label="Comment intent"
-            value={intent}
-            onChange={(event) => {
-              const nextIntent = event.target.value as CommentIntent;
-              setLocalIntent(nextIntent);
-              onIntentChange?.(nextIntent);
-            }}
-            disabled={isSubmitting}
-            className="rounded border border-github-border bg-github-bg-secondary px-2 py-1"
-          >
-            <option value="comment">Comment</option>
-            <option value="question">Question</option>
-            <option value="change">Request change</option>
-          </select>
-        </label>
-      )}
+      <div
+        role="radiogroup"
+        aria-label="Comment intent"
+        onKeyDownCapture={handleKeyDown}
+        className="mb-3 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-1 text-xs text-github-text-secondary"
+      >
+        {(
+          [
+            ['comment', 'Comment', 'Share context or feedback. No agent reply is expected.'],
+            ['change', 'Change request', 'Ask the agent to change the code and follow up.'],
+            ['question', 'Question', 'Ask the agent for an explanation or answer.'],
+          ] as const
+        ).map(([value, label, description]) => (
+          <Tooltip key={value} content={description}>
+            <label
+              className={`inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-[4px] px-1.5 py-1 transition-colors${intent === value ? ' bg-github-text-primary/8 font-bold text-github-text-primary' : ''}`}
+            >
+              <input
+                type="radio"
+                name={intentGroupId}
+                value={value}
+                aria-description={description}
+                checked={intent === value}
+                disabled={isSubmitting}
+                onChange={() => {
+                  setLocalIntent(value);
+                  onIntentChange?.(value);
+                }}
+              />
+              {label}
+            </label>
+          </Tooltip>
+        ))}
+      </div>
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium" style={{ color: 'var(--color-yellow-path-text)' }}>
           {title}
@@ -205,24 +212,6 @@ export function CommentForm({
       )}
 
       <div className="flex gap-2 justify-end">
-        {showQuestionToggle && (
-          <label
-            className="mr-auto flex cursor-pointer items-center gap-1.5 text-xs text-github-text-secondary"
-            title="Ask the AI to answer this instead of changing code"
-          >
-            <input
-              type="checkbox"
-              checked={isQuestion}
-              onKeyDown={handleKeyDown}
-              onChange={(e) => {
-                setLocalIsQuestion(e.target.checked);
-                onQuestionChange?.(e.target.checked);
-              }}
-              disabled={isSubmitting}
-            />
-            Question
-          </label>
-        )}
         <button
           type="submit"
           className="text-xs px-3 py-1.5 rounded transition-all disabled:opacity-50"

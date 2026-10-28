@@ -92,10 +92,12 @@ describe('Conversation keyboard navigation', () => {
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.type(screen.getByRole('textbox'), 'Why this approach?');
     await user.tab();
-    await user.tab();
     expect(screen.getByRole('button', { name: 'Send' })).toHaveFocus();
     await user.keyboard('{Enter}');
-    expect(onAddGeneralComment).toHaveBeenCalledWith('Why this approach?', { isQuestion: false });
+    expect(onAddGeneralComment).toHaveBeenCalledWith('Why this approach?', {
+      isQuestion: false,
+      intent: 'comment',
+    });
     expect(onNavigate).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
@@ -138,20 +140,18 @@ describe('Conversation drafts', () => {
     render(<TriggerHarness onNavigate={onNavigate} onAddGeneralComment={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.type(screen.getByRole('textbox'), 'Why this approach?');
-    await user.click(screen.getByRole('checkbox', { name: 'Question' }));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Comment intent' }), 'change');
+    await user.click(screen.getByRole('radio', { name: 'Question' }));
+    await user.click(screen.getByRole('radio', { name: 'Change request' }));
     await user.click(screen.getByText('Thread A'));
     expect(onNavigate).toHaveBeenCalledWith(inline);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     expect(screen.getByRole('textbox')).toHaveValue('Why this approach?');
-    expect(screen.getByRole('checkbox', { name: 'Question' })).toBeChecked();
-    expect(screen.getByRole('combobox', { name: 'Comment intent' })).toHaveValue('change');
+    expect(screen.getByRole('radio', { name: 'Change request' })).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Close conversation' }));
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     expect(screen.getByRole('textbox')).toHaveValue('Why this approach?');
-    expect(screen.getByRole('checkbox', { name: 'Question' })).toBeChecked();
-    expect(screen.getByRole('combobox', { name: 'Comment intent' })).toHaveValue('change');
+    expect(screen.getByRole('radio', { name: 'Change request' })).toBeChecked();
   });
 
   it.each(['Reset', 'Escape'])(
@@ -161,7 +161,7 @@ describe('Conversation drafts', () => {
       render(<TriggerHarness onNavigate={vi.fn()} onAddGeneralComment={vi.fn()} />);
       await user.click(screen.getByRole('button', { name: 'Open conversation' }));
       await user.type(screen.getByRole('textbox'), 'Never mind');
-      await user.click(screen.getByRole('checkbox', { name: 'Question' }));
+      await user.click(screen.getByRole('radio', { name: 'Question' }));
       if (action === 'Reset') {
         fireEvent.reset(screen.getByRole('textbox').closest('form')!);
       } else {
@@ -170,7 +170,7 @@ describe('Conversation drafts', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Open conversation' }));
       expect(screen.getByRole('textbox')).toHaveValue('');
-      expect(screen.getByRole('checkbox', { name: 'Question' })).not.toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Comment' })).toBeChecked();
     },
   );
 
@@ -180,15 +180,18 @@ describe('Conversation drafts', () => {
     render(<TriggerHarness onNavigate={vi.fn()} onAddGeneralComment={onAddGeneralComment} />);
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.type(screen.getByRole('textbox'), 'Why this approach?');
-    await user.click(screen.getByRole('checkbox', { name: 'Question' }));
+    await user.click(screen.getByRole('radio', { name: 'Question' }));
     await user.click(screen.getByRole('button', { name: 'Send' }));
-    expect(onAddGeneralComment).toHaveBeenCalledWith('Why this approach?', { isQuestion: true });
+    expect(onAddGeneralComment).toHaveBeenCalledWith('Why this approach?', {
+      isQuestion: true,
+      intent: 'question',
+    });
     expect(screen.getByRole('textbox')).toHaveValue('');
-    expect(screen.getByRole('checkbox', { name: 'Question' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Comment' })).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Close conversation' }));
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     expect(screen.getByRole('textbox')).toHaveValue('');
-    expect(screen.getByRole('checkbox', { name: 'Question' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Comment' })).toBeChecked();
   });
 
   it('keeps a newer draft if an earlier send finishes after reopening', async () => {
@@ -208,12 +211,11 @@ describe('Conversation drafts', () => {
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.clear(screen.getByRole('textbox'));
     await user.type(screen.getByRole('textbox'), 'Second question');
-    await user.click(screen.getByRole('checkbox', { name: 'Question' }));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Comment intent' }), 'change');
+    await user.click(screen.getByRole('radio', { name: 'Question' }));
+    await user.click(screen.getByRole('radio', { name: 'Change request' }));
     await act(async () => finishSend());
     expect(screen.getByRole('textbox')).toHaveValue('Second question');
-    expect(screen.getByRole('checkbox', { name: 'Question' })).toBeChecked();
-    expect(screen.getByRole('combobox', { name: 'Comment intent' })).toHaveValue('change');
+    expect(screen.getByRole('radio', { name: 'Change request' })).toBeChecked();
   });
 
   it('retains a draft after a failed send and reopening the drawer', async () => {
@@ -223,12 +225,12 @@ describe('Conversation drafts', () => {
     render(<TriggerHarness onNavigate={vi.fn()} onAddGeneralComment={onAddGeneralComment} />);
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     await user.type(screen.getByRole('textbox'), 'Why this approach?');
-    await user.click(screen.getByRole('checkbox', { name: 'Question' }));
+    await user.click(screen.getByRole('radio', { name: 'Question' }));
     await user.click(screen.getByRole('button', { name: 'Send' }));
     expect(error).toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Close conversation' }));
     await user.click(screen.getByRole('button', { name: 'Open conversation' }));
     expect(screen.getByRole('textbox')).toHaveValue('Why this approach?');
-    expect(screen.getByRole('checkbox', { name: 'Question' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Question' })).toBeChecked();
   });
 });

@@ -407,6 +407,22 @@ it('keeps each reply intent below its header in a resolved general conversation'
       ],
     }),
   ).toBe(
-    'Review conversation\nStatus: resolved\nRoot comment\nReply 1 (User)\nIntent: Question\nWhy?\nReply 2 (User)\nIntent: Request change\nPlease change this.',
+    'Review conversation\nStatus: resolved\nRoot comment\nReply 1 (User)\nIntent: Question\nWhy?\nReply 2 (User)\nIntent: Change request\nPlease change this.',
   );
 });
+
+it.each(['comment', 'change', 'question'] as const)(
+  'uses explicit %s intent over a conflicting legacy question flag',
+  (intent) => {
+    const time = '2026-10-27T00:00:00Z';
+    const prompt = formatCommentThreadPrompt({
+      id: 'legacy-choice',
+      scope: 'review',
+      createdAt: time,
+      updatedAt: time,
+      isQuestion: intent !== 'question',
+      messages: [{ id: 'root', body: 'Review feedback', intent, createdAt: time, updatedAt: time }],
+    });
+    expect(prompt.includes("[QUESTION — answer, don't change code]")).toBe(intent === 'question');
+  },
+);

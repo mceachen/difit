@@ -42,8 +42,13 @@ interface SideBySideDiffChunkProps {
   onRemoveThread?: (threadId: string) => void;
   onReplyToThread: (threadId: string, body: string, intent?: CommentIntent) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
-  onUpdateMessage: (threadId: string, messageId: string, newBody: string) => void;
-  onSetThreadQuestion?: (threadId: string, isQuestion: boolean) => void;
+  onUpdateMessage: (
+    threadId: string,
+    messageId: string,
+    newBody: string,
+    intent?: CommentIntent,
+  ) => void;
+
   syntaxTheme?: AppearanceSettings['syntaxTheme'];
   cursor?: CursorPosition | null;
   fileIndex?: number;
@@ -156,7 +161,7 @@ export function SideBySideDiffChunk({
   onReplyToThread,
   onRemoveMessage,
   onUpdateMessage,
-  onSetThreadQuestion,
+
   syntaxTheme,
   cursor = null,
   fileIndex = 0,
@@ -827,7 +832,6 @@ export function SideBySideDiffChunk({
                                   onReplyToThread={onReplyToThread}
                                   onRemoveMessage={onRemoveMessage}
                                   onUpdateMessage={onUpdateMessage}
-                                  onSetThreadQuestion={onSetThreadQuestion}
                                   syntaxTheme={syntaxTheme}
                                 />
                               </div>
@@ -868,7 +872,6 @@ export function SideBySideDiffChunk({
                               selectedCode={getSelectedCodeContent()}
                               syntaxTheme={syntaxTheme}
                               filename={filename}
-                              showQuestionToggle={true}
                             />
                           </div>
                         </div>

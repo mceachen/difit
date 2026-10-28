@@ -20,8 +20,13 @@ interface CommentsListModalProps {
   onGenerateThreadPrompt: (thread: CommentThread) => string;
   onReplyToThread: (threadId: string, body: string, intent?: CommentIntent) => Promise<void>;
   onRemoveMessage: (threadId: string, messageId: string) => void;
-  onUpdateMessage: (threadId: string, messageId: string, newBody: string) => void;
-  onSetThreadQuestion?: (threadId: string, isQuestion: boolean) => void;
+  onUpdateMessage: (
+    threadId: string,
+    messageId: string,
+    newBody: string,
+    intent?: CommentIntent,
+  ) => void;
+
   syntaxTheme?: AppearanceSettings['syntaxTheme'];
 }
 
@@ -38,16 +43,15 @@ export function CommentsListModal({
   onReplyToThread,
   onRemoveMessage,
   onUpdateMessage,
-  onSetThreadQuestion,
+
   syntaxTheme,
 }: CommentsListModalProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filter, setFilter] = useState<'all' | 'open' | 'resolved'>('all');
   const [generalDraft, setGeneralDraft] = useState<{
     body: string;
-    isQuestion: boolean;
     intent: CommentIntent;
-  }>({ body: '', isQuestion: false, intent: 'comment' });
+  }>({ body: '', intent: 'comment' });
   const commentRefs = useRef<(HTMLDivElement | null)[]>([]);
   const dialogRef = useRef<HTMLDivElement>(null);
   const { enableScope, disableScope } = useHotkeysContext();
@@ -235,11 +239,6 @@ export function CommentsListModal({
                   onIntentChange={(intent) =>
                     setGeneralDraft((current) => ({ ...current, intent }))
                   }
-                  showQuestionToggle
-                  questionValue={generalDraft.isQuestion}
-                  onQuestionChange={(isQuestion) =>
-                    setGeneralDraft((current) => ({ ...current, isQuestion }))
-                  }
                   dismissOnOutsideClick={false}
                   autoFocus={false}
                   title="General comment or question"
@@ -248,13 +247,11 @@ export function CommentsListModal({
                     const submittedDraft = generalDraft;
                     await onAddGeneralComment(body, options);
                     setGeneralDraft((current) =>
-                      current === submittedDraft
-                        ? { body: '', isQuestion: false, intent: 'comment' }
-                        : current,
+                      current === submittedDraft ? { body: '', intent: 'comment' } : current,
                     );
                   }}
                   onCancel={() => {
-                    setGeneralDraft({ body: '', isQuestion: false, intent: 'comment' });
+                    setGeneralDraft({ body: '', intent: 'comment' });
                     onClose();
                   }}
                 />
@@ -283,7 +280,6 @@ export function CommentsListModal({
                         onReplyToThread={onReplyToThread}
                         onRemoveMessage={onRemoveMessage}
                         onUpdateMessage={onUpdateMessage}
-                        onSetThreadQuestion={onSetThreadQuestion}
                         syntaxTheme={syntaxTheme}
                         onClick={(e) => {
                           e.stopPropagation();

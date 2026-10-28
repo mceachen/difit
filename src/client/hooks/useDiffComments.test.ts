@@ -94,6 +94,58 @@ describe('useDiffComments', () => {
     expect(reopened.result.current.threads[0]!.messages[0]!.body).toBe('Why?');
   });
 
+  it.each(['comment', 'change', 'question', undefined] as const)(
+    'restores and persists question flags from root intent %s with a legacy fallback',
+    (intent) => {
+      const { result, unmount } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+      act(() => result.current.addReviewThread('Root'));
+      const stored = mockDiffContextData!.threads[0]!;
+      stored.isQuestion = intent === 'question' ? undefined : true;
+      stored.messages[0]!.intent = intent;
+      const originalMessage = structuredClone(stored.messages[0]!);
+      const expectedQuestion = intent === undefined || intent === 'question' ? true : undefined;
+      unmount();
+
+      const reopened = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+
+      expect(reopened.result.current.threads[0]!.isQuestion).toBe(expectedQuestion);
+      expect(mockDiffContextData!.threads[0]!.isQuestion).toBe(expectedQuestion);
+      expect(reopened.result.current.threads[0]!.messages[0]).toEqual(originalMessage);
+      expect(reopened.result.current.generateThreadPrompt(stored.id).includes('[QUESTION')).toBe(
+        Boolean(expectedQuestion),
+      );
+    },
+  );
+
+  it.each(['comment', 'change', 'question', undefined] as const)(
+    'aligns live question flags with root intent %s while preserving current progress',
+    (intent) => {
+      const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+      act(() => result.current.addReviewThread('Root'));
+      const live = structuredClone(result.current.threads);
+      const thread = live[0]!;
+      thread.isQuestion = intent === 'question' ? undefined : true;
+      const message = thread.messages[0]!;
+      message.intent = intent;
+      message.progress = {
+        status: 'thinking',
+        cursor: 'stream:1',
+        updatedAt: '2026-10-24T00:00:00Z',
+      };
+      const expectedQuestion = intent === undefined || intent === 'question' ? true : undefined;
+
+      act(() => result.current.replaceThreads(live));
+
+      expect(result.current.threads[0]!.isQuestion).toBe(expectedQuestion);
+      expect(mockDiffContextData!.threads[0]!.isQuestion).toBe(expectedQuestion);
+      expect(result.current.threads[0]!.messages[0]).toEqual(message);
+      expect(mockDiffContextData!.threads[0]!.messages[0]!.progress).toBeUndefined();
+      expect(result.current.generateThreadPrompt(thread.id).includes('[QUESTION')).toBe(
+        Boolean(expectedQuestion),
+      );
+    },
+  );
+
   it('clears progress immediately when editing a message', () => {
     const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
     act(() => {
@@ -112,6 +164,142 @@ describe('useDiffComments', () => {
     expect(result.current.threads[0]!.messages[0]!.progress).toBeUndefined();
     expect(mockDiffContextData!.threads[0]!.messages[0]!.progress).toBeUndefined();
   });
+
+  it('delivers an intent-only edit on an imported finding as a user revision', () => {
+    const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+    act(() => {
+      result.current.applyCommentImports(
+        [
+          {
+            type: 'thread',
+            id: 'finding',
+            filePath: 'a.ts',
+            position: { side: 'new', line: 1 },
+            body: 'Review finding',
+            author: 'Codex',
+          },
+        ],
+        'review-findings',
+      );
+    });
+    const importedThreads = structuredClone(result.current.threads);
+    const message = importedThreads[0]!.messages[0]!;
+    message.updatedAt = '2026-10-24T00:00:00Z';
+    message.progress = {
+      status: 'replied',
+      cursor: 'stream:1',
+      updatedAt: message.updatedAt,
+    };
+    act(() => result.current.replaceThreads(importedThreads));
+    const selection = { baseCommitish: 'main', targetCommitish: 'feature' };
+    const journal = new Conversation();
+    journal.update(selection, [], importedThreads, 'agent');
+    const cursor = journal.cursor;
+
+    act(() => result.current.updateMessage('finding', message.id, message.body, 'question'));
+    journal.update(selection, importedThreads, result.current.threads, 'user');
+
+    const edited = result.current.threads[0]!.messages[0]!;
+    expect(edited).toMatchObject({ body: message.body, intent: 'question', origin: 'user' });
+    expect(edited.updatedAt).not.toBe(message.updatedAt);
+    expect(edited.progress).toBeUndefined();
+    expect(result.current.threads[0]!.isQuestion).toBe(true);
+    expect(mockDiffContextData!.threads[0]!.messages[0]).toEqual(edited);
+    expect(journal.read(cursor).events).toEqual([
+      expect.objectContaining({ type: 'comment.updated', origin: 'user', intent: 'question' }),
+    ]);
+    expect(journal.snapshot().reviews[0]!.threads[0]!.messages[0]!.progress?.status).toBe('queued');
+  });
+
+  it.each(['comment', 'change'] as const)(
+    'clears a legacy root question marker when its intent is explicitly changed to %s',
+    (intent) => {
+      const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+      act(() => result.current.addReviewThread('Why?', { isQuestion: true }));
+      const legacy = structuredClone(result.current.threads);
+      delete legacy[0]!.messages[0]!.intent;
+      act(() => result.current.replaceThreads(legacy));
+      const thread = result.current.threads[0]!;
+      const message = thread.messages[0]!;
+
+      act(() => result.current.updateMessage(thread.id, message.id, message.body, intent));
+
+      expect(result.current.threads[0]!.isQuestion).toBeUndefined();
+      expect(mockDiffContextData!.threads[0]!.isQuestion).toBeUndefined();
+      expect(result.current.threads[0]!.messages[0]).toMatchObject({ intent, origin: 'user' });
+      expect(result.current.generateThreadPrompt(thread.id)).not.toContain('[QUESTION');
+    },
+  );
+
+  it.each([
+    { rootIntent: 'question', replyIntent: 'comment' },
+    { rootIntent: 'comment', replyIntent: 'question' },
+  ] as const)('keeps the root $rootIntent intent when a reply becomes $replyIntent', (intents) => {
+    const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+    act(() => result.current.addReviewThread('Root', { intent: intents.rootIntent }));
+    const threadId = result.current.threads[0]!.id;
+    act(() => result.current.replyToThread({ threadId, body: 'Reply' }));
+    const thread = result.current.threads[0]!;
+    const reply = thread.messages[1]!;
+
+    act(() => result.current.updateMessage(threadId, reply.id, reply.body, intents.replyIntent));
+
+    expect(result.current.threads[0]!.isQuestion).toBe(thread.isQuestion);
+    expect(result.current.threads[0]!.messages[0]).toEqual(thread.messages[0]);
+    expect(result.current.threads[0]!.messages[1]).toMatchObject({
+      body: reply.body,
+      intent: intents.replyIntent,
+      origin: 'user',
+    });
+  });
+
+  it('preserves existing intent and origin when a body edit omits intent', () => {
+    const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+    act(() => result.current.addReviewThread('Why?', { intent: 'question' }));
+    const imported = structuredClone(result.current.threads);
+    imported[0]!.messages[0]!.origin = 'agent';
+    act(() => result.current.replaceThreads(imported));
+    const thread = result.current.threads[0]!;
+    const message = thread.messages[0]!;
+
+    act(() => result.current.updateMessage(thread.id, message.id, 'Reworded question'));
+
+    expect(result.current.threads[0]!.isQuestion).toBe(true);
+    expect(result.current.threads[0]!.messages[0]).toMatchObject({
+      body: 'Reworded question',
+      intent: 'question',
+      origin: 'agent',
+    });
+  });
+
+  it.each(['review', 'line'] as const)(
+    'uses explicit intent before the legacy question flag for new %s threads',
+    (scope) => {
+      const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));
+      const cases = [
+        { intent: 'comment', isQuestion: true, expected: undefined },
+        { intent: 'change', isQuestion: true, expected: undefined },
+        { intent: 'question', isQuestion: false, expected: true },
+        { isQuestion: true, expected: true },
+      ] as const;
+      for (const { expected, ...options } of cases) {
+        act(() => {
+          if (scope === 'review') result.current.addReviewThread('Body', options);
+          else
+            result.current.addThread({
+              filePath: 'a.ts',
+              side: 'new',
+              line: 1,
+              body: 'Body',
+              ...options,
+            });
+        });
+        const thread = result.current.threads.at(-1)!;
+        expect(thread.isQuestion).toBe(expected);
+        expect(thread.messages[0]!.intent).toBe('intent' in options ? options.intent : 'question');
+      }
+    },
+  );
 
   it('delivers a question toggle on an imported finding as a user revision', () => {
     const { result } = renderHook(() => useDiffComments('main', 'feature', 'abc123'));

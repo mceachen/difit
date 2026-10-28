@@ -123,10 +123,10 @@ describe('CommentsListModal', () => {
       screen.getByPlaceholderText('Comment or ask about this review…'),
       'How does this work?',
     );
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Comment intent' }), 'question');
+    await user.click(screen.getByRole('radio', { name: 'Question' }));
     await user.click(screen.getByRole('button', { name: 'Send' }));
     expect(onAddGeneralComment).toHaveBeenCalledWith('How does this work?', {
-      isQuestion: false,
+      isQuestion: true,
       intent: 'question',
     });
     await user.selectOptions(
