@@ -16,6 +16,10 @@ onlyBuiltDependencies:
   - lefthook
 
 minimumReleaseAge: 20160
+# Approved security patch exceptions; keep all other releases behind the 14-day gate.
+minimumReleaseAgeExclude:
+  - body-parser@2.4.0
+  - qs@6.16.1
 
 # Mermaid uses the stable renderToString API; keep its math renderer on a patched version.
 overrides:
