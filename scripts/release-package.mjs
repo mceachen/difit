@@ -20,6 +20,13 @@ const repository = process.env.GITHUB_REPOSITORY
   : manifest.repository?.url;
 const expectedVersion = process.env.EXPECTED_PACKAGE_VERSION ?? manifest.version;
 
+// npm excludes names rather than versions. Pair each approved age exception
+// with an exact consumer override, and drop both once the patch is 14 days old.
+const consumerAgeExceptions = [
+  { name: 'body-parser', version: '2.4.0', eligibleAt: '2026-11-05T11:39:38.614Z' },
+  { name: 'qs', version: '6.16.1', eligibleAt: '2026-10-28T22:06:17.002Z' },
+].filter(({ eligibleAt }) => Date.now() < Date.parse(eligibleAt));
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -125,7 +132,15 @@ if (command === 'pack') {
   const tarball = verify();
   const directory = mkdtempSync(join(tmpdir(), 'difit-package-'));
   try {
-    writeFileSync(join(directory, 'package.json'), '{"private":true}\n');
+    writeFileSync(
+      join(directory, 'package.json'),
+      JSON.stringify({
+        private: true,
+        overrides: Object.fromEntries(
+          consumerAgeExceptions.map(({ name, version }) => [name, version]),
+        ),
+      }),
+    );
     runNpm(
       [
         'install',
@@ -133,13 +148,21 @@ if (command === 'pack') {
         directory,
         '--ignore-scripts',
         '--min-release-age=14',
-        '--package-lock=false',
+        ...consumerAgeExceptions.map(({ name }) => `--min-release-age-exclude=${name}`),
+        '--package-lock=true',
         '--no-audit',
         '--no-fund',
         '--save-exact',
         tarball,
       ],
       { stdio: 'inherit' },
+    );
+    const audit = JSON.parse(
+      runNpm(['audit', '--prefix', directory, '--omit=dev', '--audit-level=low', '--json']),
+    );
+    assert(
+      audit.metadata?.vulnerabilities?.total === 0,
+      'Installed tarball has production advisories',
     );
     const executable = join(
       directory,
