@@ -30,6 +30,12 @@ Keep credentials out of arguments and write in the user's language:
   --comment '{"type":"thread","filePath":"src/example.ts","position":{"side":"new","line":36},"body":"Review finding"}'
 ```
 
+For a proposed commit, supply `--commit-message <text>` and `--why <text>`.
+Read the review's saved `summary` from `comment snapshot` before committing;
+honor the user's message edits within the approved scope and repository rules.
+To update it, `comment summary` accepts `{reviewId,commitMessage,rationale,baseVersion}`
+on stdin. Changed summaries revoke LGTM; `review.summary` events need no comment receipt.
+
 While review is active, keep watching between work steps:
 
 ```sh

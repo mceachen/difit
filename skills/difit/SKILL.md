@@ -20,6 +20,12 @@ Conversation and LGTM are enabled by default. Use `--keep-alive` for review roun
 and `--no-lgtm` for read-only review. A viewer request grants no edit/commit
 permission; make requested, authorized fixes only in the owning checkout.
 
+For a proposed commit, supply `--commit-message <text>` and `--why <text>`.
+Read the review's saved `summary` from `comment snapshot` before committing;
+honor the user's message edits within the approved scope and repository rules.
+To update it, `comment summary` accepts `{reviewId,commitMessage,rationale,baseVersion}`
+on stdin. Changed summaries revoke LGTM; `review.summary` events need no comment receipt.
+
 While review is active, keep watching between work steps:
 
 ```sh
