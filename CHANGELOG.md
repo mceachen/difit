@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added in the PhotoStructure fork
+
+- Review-wide conversations alongside inline threads, with drafts retained while navigating code.
+- Immediate JSON comment events, exact-thread agent replies, and Delivered, Read, Thinking, Replying, Replied, and Noted progress.
+- One Comment / Change request / Question control with explanatory tooltips and selection styling for light and dark themes.
+- Retained resolved discussions that can be reopened, with explicit deletion kept separate.
+- Repository and server information in the file tree, plus repository and port identity in the browser title.
+- Reversible LGTM approval that stays visible and can be revoked.
+
+### Changed in the PhotoStructure fork
+
+- Distribute the fork as `@photostructure/difit`, retaining the `difit` command.
+- Enable conversations and LGTM by default, with `--no-conversation` and `--no-lgtm` opt-outs.
+- Shorten the agent skill instructions and document the live conversation protocol.
+- Prepare releases through signed tags, package acceptance checks, and staged npm publication with human approval.
+
 ## [5.0.12] - 2026-08-29
 
 ### Changed
