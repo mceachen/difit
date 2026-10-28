@@ -110,6 +110,38 @@ describe('conversation commands', () => {
     ).toEqual(events);
   });
 
+  it('sends a review summary from stdin using the exact review and version', async () => {
+    const input = {
+      reviewId: 'review-a',
+      commitMessage: 'fix: preserve intent',
+      rationale: 'Review why.',
+      baseVersion: 3,
+    };
+    vi.mocked(detectStdinSource).mockReturnValue('pipe');
+    vi.mocked(readStdin).mockResolvedValue(JSON.stringify(input));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ ...input, version: 4 })));
+    await createCommentCommand().parseAsync(['node', 'difit', 'summary', '--port', '4966']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:4966/api/conversation/summary',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(input) }),
+    );
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('prints user summary events without sending comment receipts', async () => {
+    const event = {
+      type: 'review.summary',
+      origin: 'user',
+      reviewId: 'r',
+      cursor: 's:1',
+      summary: { commitMessage: 'fix: preserve intent', rationale: '', version: 1 },
+    };
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ events: [event], cursor: 's:1' })));
+    await createCommentCommand().parseAsync(['node', 'difit', 'watch', '--port', '4966', '--once']);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith(JSON.stringify(event));
+  });
+
   it.each([404, 409])('keeps replaying when a receipt returns %s', async (status) => {
     const event = { origin: 'user', reviewId: 'r', threadId: 't', messageId: 'm', cursor: 's:1' };
     fetchMock

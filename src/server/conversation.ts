@@ -7,6 +7,7 @@ import type {
   ConversationEvent,
   ConversationSnapshot,
   ReviewApproval,
+  ReviewSummary,
 } from '../types/conversation.js';
 import type { CommentProgress, DiffCommentThread, DiffSelection } from '../types/diff.js';
 import { getDiffSelectionKey } from '../utils/diffSelection.js';
@@ -17,6 +18,7 @@ interface Review {
   threads: DiffCommentThread[];
   progress: Map<string, CommentProgress>;
   approval: ReviewApproval;
+  summary: ReviewSummary;
 }
 
 /** A bounded, process-local journal. Cursors cannot be reused after server restart. */
@@ -39,6 +41,7 @@ export class Conversation {
         threads: [],
         progress: new Map<string, CommentProgress>(),
         approval: { approved: false },
+        summary: { commitMessage: '', rationale: '', version: 0 },
       };
       this.reviews.set(key, review);
     }
@@ -47,6 +50,27 @@ export class Conversation {
 
   getApproval(selection: DiffSelection): ReviewApproval {
     return { ...this.getReview(selection).approval };
+  }
+
+  getSummary(selection: DiffSelection): ReviewSummary {
+    return { ...this.getReview(selection).summary };
+  }
+
+  setSummary(selection: DiffSelection, summary: ReviewSummary, origin: 'user' | 'agent'): void {
+    const review = this.getReview(selection);
+    review.summary = { ...summary };
+    this.sequence += 1;
+    this.events.push({
+      type: 'review.summary',
+      origin,
+      cursor: this.cursor,
+      reviewId: review.id,
+      selection: { ...selection },
+      summary: { ...summary },
+      timestamp: new Date().toISOString(),
+    });
+    if (this.events.length > this.capacity) this.events.shift();
+    for (const listener of this.listeners) listener();
   }
 
   setApproval(selection: DiffSelection, approved: boolean): ReviewApproval {
@@ -141,6 +165,7 @@ export class Conversation {
         selection: { ...review.selection },
         threads: structuredClone(this.withProgress(review.selection, review.threads)),
         approval: { ...review.approval },
+        summary: { ...review.summary },
       })),
     };
   }

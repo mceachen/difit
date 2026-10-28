@@ -41,12 +41,12 @@ export function useReviewApproval(url: string | null) {
   }, [refresh]);
 
   const setApproved = useCallback(
-    async (approved: boolean) => {
+    async (approved: boolean, summaryVersion = 0) => {
       if (!url) throw new Error('Approval is unavailable');
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approved }),
+        body: JSON.stringify({ approved, ...(approved ? { summaryVersion } : {}) }),
       });
       if (!response.ok) throw new Error('Could not update approval');
       // Fetch current state, including changes from another browser tab.

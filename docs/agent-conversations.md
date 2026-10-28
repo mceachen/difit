@@ -85,6 +85,59 @@ model or automatically resume an idle agent. The active agent must maintain the
 wait loop, or its host must forward stream events to its session. Do not claim
 to keep watching after ending a turn without such a host integration.
 
+## Proposed commit message and rationale
+
+The review's proposed commit message and short rationale explain what would be
+committed and why. Seed the initial selection when starting difit:
+
+```sh
+difit . --commit-message 'fix: preserve review intent' --why 'Keep the proposed change clear during review.'
+```
+
+The browser can edit and save these fields for each diff selection, including
+with `--no-conversation`. Values are process-local and disappear when the server
+restarts. Saving a changed proposal revokes any existing LGTM approval for that
+selection. Editing these fields never executes Git or creates a commit.
+
+`comment snapshot --port <port>` includes `summary` on each review:
+`{commitMessage,rationale,version,updatedAt?}`. Use that review's `id` and summary
+version to write a proposal without following another tab's current selection:
+
+```sh
+difit comment summary --port 4966 < /tmp/difit-summary.json
+```
+
+```json
+{
+  "reviewId": "<snapshot.reviews[n].id>",
+  "commitMessage": "fix: preserve review intent",
+  "rationale": "Explain the reason for this change.",
+  "baseVersion": 0
+}
+```
+
+The command prints the saved summary. A stale `baseVersion` fails; read the
+latest snapshot and reconcile the proposal before retrying. Empty strings clear
+the fields. Commit messages are limited to 16000 characters and rationales to 4000. Unchanged saves preserve the version and emit no event.
+
+Saved changes emit `review.summary` events with `origin`, `reviewId`, `selection`,
+`summary`, `cursor`, and `timestamp`. These events have no thread or message ID
+and require no comment receipt. Browser writes always use user origin; the agent
+command always uses agent origin. Approval revocations emit the usual
+`review.approval` event.
+
+Browser API: `GET /api/review-summary?base=...&target=...&baseMode=merge-base`
+returns the summary (initially empty, version 0). `POST` to the same URL accepts
+`{commitMessage,rationale,baseVersion}`. Agent writes use
+`POST /api/conversation/summary` with the command's JSON shape. Both require
+`application/json` and return the saved summary. Stale writes return HTTP 409
+with `{error,summary}` containing the latest version. Browser updates broadcast
+`reviewSummaryChanged` through the existing watch connection.
+
+Approving with `POST /api/approval` includes the displayed `summaryVersion`.
+The server rejects an approval for an older proposal with HTTP 409. Revocation
+remains available regardless of the summary version.
+
 ## General conversation and comment intent
 
 The header's **Conversation** button opens a panel containing general and inline

@@ -26,7 +26,7 @@ export interface ConversationEvent {
 }
 
 export interface ConversationBatch {
-  events: (ConversationEvent | ReviewApprovalEvent)[];
+  events: (ConversationEvent | ReviewApprovalEvent | ReviewSummaryEvent)[];
   cursor: string;
 }
 
@@ -34,6 +34,23 @@ export interface ReviewApproval {
   approved: boolean;
   updatedAt?: string;
   cursor?: string;
+}
+
+export interface ReviewSummary {
+  commitMessage: string;
+  rationale: string;
+  version: number;
+  updatedAt?: string;
+}
+
+interface ReviewSummaryEvent {
+  type: 'review.summary';
+  origin: 'user' | 'agent';
+  cursor: string;
+  reviewId: string;
+  selection: DiffSelection;
+  summary: ReviewSummary;
+  timestamp: string;
 }
 
 interface ReviewApprovalEvent {
@@ -53,5 +70,6 @@ export interface ConversationSnapshot {
     selection: DiffSelection;
     threads: DiffCommentThread[];
     approval: ReviewApproval;
+    summary: ReviewSummary;
   }[];
 }

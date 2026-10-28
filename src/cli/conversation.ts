@@ -69,7 +69,7 @@ export function addConversationCommands(comment: Command): void {
           await checkResponse(response);
           const batch = (await response.json()) as ConversationBatch;
           for (const event of batch.events) {
-            if (event.origin === 'user' && event.type !== 'review.approval') {
+            if (event.origin === 'user' && 'threadId' in event) {
               const receipt = await fetch(
                 `http://localhost:${options.port}/api/conversation/status`,
                 {
@@ -107,6 +107,32 @@ export function addConversationCommands(comment: Command): void {
     .action(async (options: { port: number }) => {
       try {
         const response = await fetch(`http://localhost:${options.port}/api/conversation/snapshot`, {
+          signal: AbortSignal.timeout(30000),
+        });
+        await checkResponse(response);
+        console.log(JSON.stringify(await response.json()));
+      } catch (error) {
+        reportError(error, options.port);
+      }
+    });
+
+  comment
+    .command('summary')
+    .description('Update a review proposal by review ID; accepts JSON via stdin')
+    .argument('[json]', 'JSON with reviewId, commitMessage, rationale, and baseVersion')
+    .requiredOption('--port <port>', 'port of a difit --conversation server', (value: string) =>
+      integerInRange(value, 1, 65535),
+    )
+    .action(async (json: string | undefined, options: { port: number }) => {
+      try {
+        if (json === undefined && detectStdinSource() === 'tty') {
+          throw new Error('Provide review summary JSON as an argument or via stdin');
+        }
+        const body: unknown = JSON.parse(json ?? (await readStdin()));
+        const response = await fetch(`http://localhost:${options.port}/api/conversation/summary`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
           signal: AbortSignal.timeout(30000),
         });
         await checkResponse(response);

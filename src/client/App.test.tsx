@@ -601,7 +601,7 @@ describe('App Component - Ship it', () => {
       expect(global.fetch).toHaveBeenCalledWith('/api/approval?base=HEAD%5E&target=HEAD', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approved: true }),
+        body: JSON.stringify({ approved: true, summaryVersion: 0 }),
       });
     });
     await waitFor(() => expect(button).toHaveAttribute('aria-pressed', 'true'));
@@ -619,6 +619,41 @@ describe('App Component - Ship it', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approved: false }),
     });
+  });
+
+  it('edits review intent and waits for the summary to be saved before approval', async () => {
+    mockFetch({ ...mockDiffResponse, shipIt: true });
+    renderApp();
+    const approval = await screen.findByRole('button', { name: 'LGTM' });
+    await waitFor(() => expect(approval).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /Change summary/ }));
+    fireEvent.change(screen.getByLabelText('Why this change'), {
+      target: { value: 'Reviewers need to understand the proposed commit.' },
+    });
+    fireEvent.change(screen.getByLabelText('Proposed commit message'), {
+      target: { value: 'feat: explain the proposed commit' },
+    });
+    expect(approval).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save summary' }));
+    await waitFor(() => expect(approval).toBeEnabled());
+    expect(global.fetch).toHaveBeenCalledWith('/api/review-summary?base=HEAD%5E&target=HEAD', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        commitMessage: 'feat: explain the proposed commit',
+        rationale: 'Reviewers need to understand the proposed commit.',
+        baseVersion: 0,
+      }),
+    });
+    expect(screen.getByText('Saved for this review')).toBeInTheDocument();
+    fireEvent.click(approval);
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith('/api/approval?base=HEAD%5E&target=HEAD', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved: true, summaryVersion: 1 }),
+      }),
+    );
   });
 });
 
@@ -680,7 +715,7 @@ describe('App Component - Ship it delivery', () => {
       expect(global.fetch).toHaveBeenCalledWith('/api/approval?base=def4567&target=abc1234', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approved: true }),
+        body: JSON.stringify({ approved: true, summaryVersion: 0 }),
       });
     });
   });
@@ -936,8 +971,9 @@ describe('App Component - Diff Mode Persistence', () => {
     fireEvent.click(refreshButton);
 
     await waitFor(() => {
-      // 4 calls: initial /api/diff, /api/revisions, initial /api/comments sync, and refresh /api/diff
-      expect(mockGlobalFetch).toHaveBeenCalledTimes(4);
+      expect(
+        mockGlobalFetch.mock.calls.filter(([url]) => String(url).startsWith('/api/diff')),
+      ).toHaveLength(2);
     });
 
     await waitFor(() => {

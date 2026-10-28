@@ -88,6 +88,8 @@ interface CliOptions {
   clean?: boolean;
   shipIt?: boolean;
   conversation?: boolean;
+  commitMessage?: string;
+  why?: string;
   includeUntracked?: boolean;
   keepAlive?: boolean;
   background?: boolean;
@@ -131,6 +133,8 @@ program
   .option('--no-lgtm, --no-ship-it', 'hide the LGTM approval toggle')
   .option('--conversation', 'enable live comment events and exact-thread agent replies', true)
   .option('--no-conversation', 'disable live comment events and agent replies')
+  .option('--commit-message <text>', 'seed the proposed commit message for the initial review')
+  .option('--why <text>', 'seed a short rationale for the initial review')
   .option('--include-untracked', 'automatically include untracked files in diff')
   .option('--keep-alive', 'keep server running even after browser disconnects')
   .option('--background', 'keep the server running in the background and output JSON info')
@@ -246,6 +250,8 @@ program
           clearComments: options.clean,
           shipIt: options.shipIt,
           conversation: options.conversation,
+          commitMessage: options.commitMessage,
+          why: options.why,
           keepAlive: options.keepAlive,
           ...(commentImports.length > 0 ? { commentImports } : {}),
         });
@@ -308,6 +314,8 @@ program
         clearComments: options.clean,
         shipIt: options.shipIt,
         conversation: options.conversation,
+        commitMessage: options.commitMessage,
+        why: options.why,
         keepAlive: options.keepAlive,
         contextLines: options.context,
         diffMode: determineDiffMode(selection, compareWith),

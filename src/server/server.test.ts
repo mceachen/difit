@@ -1842,7 +1842,7 @@ describe('Server Integration Tests', () => {
       const batch = (await (
         await fetch(`${origin}/api/conversation/events?wait=0`)
       ).json()) as ConversationBatch;
-      const event = batch.events.find((entry) => entry.type !== 'review.approval')!;
+      const event = batch.events.find((entry) => 'threadId' in entry)!;
       expect(event).toMatchObject({
         scope: 'review',
         intent: 'question',
@@ -1897,7 +1897,7 @@ describe('Server Integration Tests', () => {
       const batch = (await (
         await fetch(`${origin}/api/conversation/events?wait=0`)
       ).json()) as ConversationBatch;
-      const event = batch.events.find((entry) => entry.type !== 'review.approval')!;
+      const event = batch.events.find((entry) => 'threadId' in entry)!;
       expect((await post('/api/conversation/status', { ...event, status: 'noted' })).status).toBe(
         200,
       );
@@ -1931,7 +1931,7 @@ describe('Server Integration Tests', () => {
       const batch = (await (
         await fetch(`${origin}/api/conversation/events?wait=0`)
       ).json()) as ConversationBatch;
-      const event = batch.events.find((entry) => entry.type !== 'review.approval')!;
+      const event = batch.events.find((entry) => 'threadId' in entry)!;
       const identity = {
         reviewId: event.reviewId,
         threadId: event.threadId,
@@ -2018,7 +2018,7 @@ describe('Server Integration Tests', () => {
       const initial = await fetch(`${origin}/api/conversation/events?wait=0`);
       const batch = (await initial.json()) as ConversationBatch;
       expect(batch.events).toHaveLength(1);
-      const event = batch.events.find((entry) => entry.type !== 'review.approval')!;
+      const event = batch.events.find((entry) => 'threadId' in entry)!;
       expect(event).toMatchObject({
         type: 'comment.created',
         origin: 'user',
@@ -2091,7 +2091,7 @@ describe('Server Integration Tests', () => {
       const batch = (await (
         await fetch(`http://localhost:${first.port}/api/conversation/events?wait=0`)
       ).json()) as ConversationBatch;
-      const event = batch.events.find((entry) => entry.type !== 'review.approval')!;
+      const event = batch.events.find((entry) => 'threadId' in entry)!;
       await post(first.port, '/api/conversation/reply', {
         reviewId: event.reviewId,
         threadId: event.threadId,
@@ -2108,7 +2108,7 @@ describe('Server Integration Tests', () => {
       ).json()) as ConversationBatch;
       expect(
         restored.events
-          .filter((entry) => entry.type !== 'review.approval')
+          .filter((entry) => 'threadId' in entry)
           .map(({ body, origin }) => ({ body, origin })),
       ).toEqual([
         { body: 'Why?', origin: 'user' },
@@ -2159,7 +2159,7 @@ describe('Server Integration Tests', () => {
       ).json()) as ConversationBatch;
       expect(
         restored.events
-          .filter((entry) => entry.type !== 'review.approval')
+          .filter((entry) => 'threadId' in entry)
           .map(({ body, origin }) => ({ body, origin })),
       ).toEqual([
         { body: 'Finding.', origin: 'agent' },
@@ -2255,6 +2255,235 @@ describe('Server Integration Tests', () => {
           })
         ).status,
       ).toBe(400);
+    });
+  });
+
+  describe('Review summary API', () => {
+    it('isolates summaries, rejects stale writes, emits trusted origins, and revokes approval', async () => {
+      const { port, server } = await startServer({ conversation: true, shipIt: true });
+      servers.push(server);
+      const origin = `http://localhost:${port}`;
+      const url = `${origin}/api/review-summary?base=base-a&target=target-a`;
+      const post = (path: string, body: unknown) =>
+        fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      expect(await (await fetch(url)).json()).toEqual({
+        commitMessage: '',
+        rationale: '',
+        version: 0,
+      });
+      await post(`${origin}/api/approval?base=base-a&target=target-a`, { approved: true });
+      const input = {
+        commitMessage: 'fix: preserve intent',
+        rationale: 'Explain the proposed change.',
+        baseVersion: 0,
+        origin: 'agent',
+      };
+      const saved = await post(url, input);
+      expect(saved.status).toBe(200);
+      expect(await saved.json()).toMatchObject({
+        commitMessage: input.commitMessage,
+        rationale: input.rationale,
+        version: 1,
+      });
+      expect(
+        await (await fetch(`${origin}/api/approval?base=base-a&target=target-a`)).json(),
+      ).toMatchObject({ approved: false });
+      const stale = await post(url, { ...input, rationale: 'Stale text' });
+      expect(stale.status).toBe(409);
+      expect(await stale.json()).toMatchObject({
+        summary: { rationale: input.rationale, version: 1 },
+      });
+      expect(
+        await (await fetch(`${origin}/api/review-summary?base=base-a&target=target-b`)).json(),
+      ).toMatchObject({ version: 0 });
+      expect(
+        await (
+          await fetch(
+            `${origin}/api/review-summary?base=base-a&target=target-a&baseMode=merge-base`,
+          )
+        ).json(),
+      ).toMatchObject({ version: 0 });
+      const snapshot = (await (
+        await fetch(`${origin}/api/conversation/snapshot`)
+      ).json()) as ConversationSnapshot;
+      const review = snapshot.reviews.find(
+        (entry) => entry.selection.targetCommitish === 'target-a' && !entry.selection.baseMode,
+      )!;
+      expect(review.summary).toMatchObject({ version: 1 });
+      await post(`${origin}/api/approval?base=base-a&target=target-a`, {
+        approved: true,
+        summaryVersion: 1,
+      });
+      expect(
+        (
+          await post(`${origin}/api/conversation/summary`, {
+            ...input,
+            reviewId: review.id,
+            baseVersion: 1,
+            rationale: 'Agent revision',
+          })
+        ).status,
+      ).toBe(200);
+      expect(
+        await (await fetch(`${origin}/api/approval?base=base-a&target=target-a`)).json(),
+      ).toMatchObject({ approved: false });
+      await post(`${origin}/api/approval?base=base-a&target=target-a`, {
+        approved: true,
+        summaryVersion: 2,
+      });
+      await post(url, { ...input, baseVersion: 2, rationale: 'Agent revision' });
+      expect(
+        await (await fetch(`${origin}/api/approval?base=base-a&target=target-a`)).json(),
+      ).toMatchObject({ approved: true });
+      const batch = (await (
+        await fetch(`${origin}/api/conversation/events?wait=0`)
+      ).json()) as ConversationBatch;
+      expect(batch.events.filter((entry) => entry.type === 'review.summary')).toEqual([
+        expect.objectContaining({
+          origin: 'user',
+          summary: expect.objectContaining({ version: 1 }),
+        }),
+        expect.objectContaining({
+          origin: 'agent',
+          summary: expect.objectContaining({ version: 2, rationale: 'Agent revision' }),
+        }),
+      ]);
+      expect(
+        (await post(`${origin}/api/conversation/summary`, { ...input, reviewId: 'missing' }))
+          .status,
+      ).toBe(404);
+    });
+
+    it('seeds the initial selection and remains editable without conversation mode', async () => {
+      const { port, server } = await startServer({
+        commitMessage: 'feat: add proposal',
+        why: 'Review the intent.',
+        shipIt: true,
+      });
+      servers.push(server);
+      const origin = `http://localhost:${port}`;
+      const url = `${origin}/api/review-summary`;
+      expect(await (await fetch(url)).json()).toMatchObject({
+        commitMessage: 'feat: add proposal',
+        rationale: 'Review the intent.',
+        version: 1,
+      });
+      await fetch(`${origin}/api/approval`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved: true, summaryVersion: 1 }),
+      });
+      const result = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commitMessage: '', rationale: '', baseVersion: 1 }),
+      });
+      expect(await result.json()).toMatchObject({ commitMessage: '', rationale: '', version: 2 });
+      expect(await (await fetch(`${origin}/api/approval`)).json()).toMatchObject({
+        approved: false,
+      });
+      expect(
+        (
+          await fetch(`${origin}/api/conversation/summary`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+          })
+        ).status,
+      ).toBe(404);
+    });
+
+    it.each([true, false])(
+      'rejects approval of an unseen summary with conversation=%s',
+      async (conversation) => {
+        const { port, server } = await startServer({ conversation, shipIt: true });
+        servers.push(server);
+        const origin = `http://localhost:${port}`;
+        const post = (path: string, body: unknown) =>
+          fetch(`${origin}${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+        expect((await post('/api/approval', { approved: true })).status).toBe(200);
+        await post('/api/review-summary', {
+          commitMessage: 'fix: initial proposal',
+          rationale: '',
+          baseVersion: 0,
+        });
+        expect((await post('/api/approval', { approved: true, summaryVersion: 1 })).status).toBe(
+          200,
+        );
+        await post('/api/review-summary', {
+          commitMessage: 'fix: revised proposal',
+          rationale: 'Changed while approving',
+          baseVersion: 1,
+        });
+        for (const summaryVersion of [undefined, 0, 1]) {
+          const response = await post('/api/approval', { approved: true, summaryVersion });
+          expect(response.status).toBe(409);
+          expect(await response.json()).toMatchObject({ summary: { version: 2 } });
+          expect(await (await fetch(`${origin}/api/approval`)).json()).toMatchObject({
+            approved: false,
+          });
+        }
+        for (const summaryVersion of [-1, 1.5, '2', null, Number.MAX_SAFE_INTEGER + 1]) {
+          expect((await post('/api/approval', { approved: true, summaryVersion })).status).toBe(
+            400,
+          );
+        }
+        expect((await post('/api/approval', { approved: true, summaryVersion: 2 })).status).toBe(
+          200,
+        );
+        expect(await (await fetch(`${origin}/api/approval`)).json()).toMatchObject({
+          approved: true,
+        });
+        expect((await post('/api/approval', { approved: false, summaryVersion: 0 })).status).toBe(
+          200,
+        );
+        expect(await (await fetch(`${origin}/api/approval`)).json()).toMatchObject({
+          approved: false,
+        });
+      },
+    );
+
+    it('rejects malformed, oversized, and browser-simple summary requests', async () => {
+      const { port, server } = await startServer({ conversation: true });
+      servers.push(server);
+      const url = `http://localhost:${port}/api/review-summary`;
+      const valid = { commitMessage: '', rationale: '', baseVersion: 0 };
+      for (const body of [
+        null,
+        {},
+        { ...valid, baseVersion: -1 },
+        { ...valid, baseVersion: 0.5 },
+        { ...valid, commitMessage: 1 },
+        { ...valid, commitMessage: 'x'.repeat(16001) },
+        { ...valid, rationale: 'x'.repeat(4001) },
+      ]) {
+        expect(
+          (
+            await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            })
+          ).status,
+        ).toBe(400);
+      }
+      expect(
+        (
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(valid),
+          })
+        ).status,
+      ).toBe(415);
     });
   });
 

@@ -33,6 +33,7 @@ import { GitHubIcon } from './components/GitHubIcon';
 import { HelpModal } from './components/HelpModal';
 import { Logo } from './components/Logo';
 import { ReloadButton } from './components/ReloadButton';
+import { ReviewSummaryPanel } from './components/ReviewSummaryPanel';
 import { RevisionDetailModal } from './components/RevisionDetailModal';
 import { SettingsModal } from './components/SettingsModal';
 import { SparkleAnimation } from './components/SparkleAnimation';
@@ -44,6 +45,7 @@ import { useFileWatch } from './hooks/useFileWatch';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 import { useLazyDiffRendering } from './hooks/useLazyDiffRendering';
 import { useReviewApproval } from './hooks/useReviewApproval';
+import { useReviewSummary } from './hooks/useReviewSummary';
 import { useViewedFiles } from './hooks/useViewedFiles';
 import { useViewport } from './hooks/useViewport';
 import { fetchClientSettings, saveClientSettings } from './services/userSettings';
@@ -249,6 +251,10 @@ function App() {
     diffData?.shipIt && commentSessionQueryString ? getCommentApiUrl('/api/approval') : null,
   );
   const refreshApproval = approval.refresh;
+  const summary = useReviewSummary(
+    commentSessionQueryString ? getCommentApiUrl('/api/review-summary') : null,
+  );
+  const refreshSummary = summary.refresh;
   const hasBootstrappedComments =
     commentsContextKey !== null && commentsContextKey === bootstrappedCommentsKey;
   const bootstrappingCommentsKeyRef = useRef<string | null>(null);
@@ -311,7 +317,12 @@ function App() {
   );
 
   const handleShipIt = async () => {
-    if (!approval.ready || isShipping || (!approval.approved && !hasBootstrappedComments)) {
+    if (
+      !approval.ready ||
+      isShipping ||
+      (!approval.approved &&
+        (!hasBootstrappedComments || !summary.ready || summary.dirty || summary.saving))
+    ) {
       return;
     }
 
@@ -320,10 +331,11 @@ function App() {
     try {
       // A failed comment save must not prevent the user from revoking approval.
       if (!approval.approved) await syncThreadsToServer(threads);
-      await approval.setApproved(!approval.approved);
+      await approval.setApproved(!approval.approved, summary.version);
     } catch (approvalError) {
       console.error('Failed to approve review:', approvalError);
       setShipItError('Could not update approval. Please try again.');
+      await Promise.all([refreshSummary(), refreshApproval()]);
     } finally {
       setIsShipping(false);
     }
@@ -580,7 +592,8 @@ function App() {
   const handleWatchReload = useCallback(async () => {
     await fetchDiffDataRef.current?.();
     await refreshApproval();
-  }, [refreshApproval]);
+    await refreshSummary();
+  }, [refreshApproval, refreshSummary]);
   const handleCommentsChanged = useCallback(async () => {
     try {
       const serverThreads = await fetchServerThreads();
@@ -599,6 +612,7 @@ function App() {
     handleWatchReload,
     handleCommentsChanged,
     refreshApproval,
+    refreshSummary,
   );
 
   // Track which file the mouse is over so `v` works without a cursor
@@ -1417,7 +1431,11 @@ function App() {
                     disabled={
                       isShipping ||
                       !approval.ready ||
-                      (!approval.approved && !hasBootstrappedComments)
+                      (!approval.approved &&
+                        (!hasBootstrappedComments ||
+                          !summary.ready ||
+                          summary.dirty ||
+                          summary.saving))
                     }
                     aria-label="LGTM"
                     aria-pressed={approval.approved}
@@ -1443,6 +1461,7 @@ function App() {
             </div>
           </div>
         </header>
+        <ReviewSummaryPanel key={commentsContextKey} summary={summary} />
         {revisionOptions && (
           <RevisionDetailModal
             key={isRevisionModalOpen ? getDiffSelectionKey(selectedRevision) : 'closed'}

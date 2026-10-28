@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 import express, { type Express } from 'express';
 import open from 'open';
 
-import type { ReviewApproval } from '../types/conversation.js';
+import type { ReviewApproval, ReviewSummary } from '../types/conversation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,6 +31,7 @@ import { getFileExtension } from '../utils/fileUtils.js';
 
 import { FileWatcherService } from './file-watcher.js';
 import { Conversation, registerConversationRoutes } from './conversation.js';
+import { emptyReviewSummary, parseReviewSummaryInput } from './review-summary.js';
 import { GitDiffParser } from './git-diff.js';
 import { parseUserSettingsPatch, readUserConfig, updateUserClientSettings } from './user-config.js';
 
@@ -62,6 +63,8 @@ interface ServerOptions {
   clearComments?: boolean;
   shipIt?: boolean;
   conversation?: boolean;
+  commitMessage?: string;
+  why?: string;
   commentImports?: CommentImport[];
   keepAlive?: boolean;
   diffMode?: DiffMode;
@@ -153,6 +156,15 @@ export async function startServer(
   const fileWatcher = new FileWatcherService();
   const conversation = options.conversation ? new Conversation() : undefined;
   const approvals = new Map<string, ReviewApproval>();
+  const summaries = new Map<string, ReviewSummary>();
+  const initialSummary = parseReviewSummaryInput({
+    commitMessage: options.commitMessage ?? '',
+    rationale: options.why ?? '',
+    baseVersion: 0,
+  });
+  if (!initialSummary) {
+    throw new Error('Commit message must be at most 16000 characters and rationale at most 4000');
+  }
   const generatedStatusCache = new Map<
     string,
     { value: GeneratedStatusResponse; expiresAt: number }
@@ -217,6 +229,18 @@ export async function startServer(
     initialSelection,
     Boolean(options.stdinDiff),
   );
+  // Ensure agents can discover the initial review even before a comment is posted.
+  conversation?.getSummary(currentCommentSelection);
+  if (initialSummary.commitMessage || initialSummary.rationale) {
+    const summary = {
+      commitMessage: initialSummary.commitMessage,
+      rationale: initialSummary.rationale,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+    };
+    summaries.set(getDiffSelectionKey(currentCommentSelection), summary);
+    conversation?.setSummary(currentCommentSelection, summary, 'agent');
+  }
 
   function parseRepositoryRelativePath(filepath: unknown):
     | { ok: true; path: string }
@@ -775,6 +799,96 @@ export async function startServer(
     );
   }
 
+  function getReviewSummary(selection: DiffSelection): ReviewSummary {
+    return (
+      conversation?.getSummary(selection) ??
+      summaries.get(getDiffSelectionKey(selection)) ??
+      emptyReviewSummary()
+    );
+  }
+
+  app.get('/api/review-summary', (req, res) => {
+    const selection = getCommentSelectionFromQuery(req.query as Record<string, unknown>);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(getReviewSummary(selection));
+  });
+
+  for (const origin of ['user', 'agent'] as const) {
+    if (origin === 'agent' && !conversation) continue;
+    app.post(
+      origin === 'user' ? '/api/review-summary' : '/api/conversation/summary',
+      (req, res) => {
+        if (!req.is('application/json')) {
+          res.status(415).json({ error: 'Review summary requires application/json' });
+          return;
+        }
+        const input = parseReviewSummaryInput(req.body);
+        if (!input) {
+          res.status(400).json({
+            error:
+              'Expected commitMessage (at most 16000 characters), rationale (at most 4000), and non-negative integer baseVersion',
+          });
+          return;
+        }
+        let selection: DiffSelection;
+        if (origin === 'agent') {
+          const reviewId = (req.body as Record<string, unknown>).reviewId;
+          if (typeof reviewId !== 'string' || !reviewId) {
+            res
+              .status(400)
+              .json({ error: 'Expected reviewId from a conversation snapshot or event' });
+            return;
+          }
+          const review = conversation?.findReview(reviewId);
+          if (!review) {
+            res.status(404).json({ error: 'Review no longer exists' });
+            return;
+          }
+          selection = review.selection;
+        } else {
+          selection = getCommentSelectionFromQuery(req.query as Record<string, unknown>);
+        }
+        const previous = getReviewSummary(selection);
+        if (previous.version !== input.baseVersion) {
+          res
+            .status(409)
+            .json({ error: 'Review summary changed; read its latest version', summary: previous });
+          return;
+        }
+        if (
+          previous.commitMessage === input.commitMessage &&
+          previous.rationale === input.rationale
+        ) {
+          res.json(previous);
+          return;
+        }
+        const summary: ReviewSummary = {
+          commitMessage: input.commitMessage,
+          rationale: input.rationale,
+          version: previous.version + 1,
+          updatedAt: new Date().toISOString(),
+        };
+        summaries.set(getDiffSelectionKey(selection), summary);
+        conversation?.setSummary(selection, summary, origin);
+        const approval =
+          conversation?.getApproval(selection) ?? approvals.get(getDiffSelectionKey(selection));
+        if (approval?.approved) {
+          const revoked = conversation?.setApproval(selection, false) ?? {
+            approved: false,
+            updatedAt: new Date().toISOString(),
+          };
+          approvals.set(getDiffSelectionKey(selection), revoked);
+          fileWatcher.broadcast({ type: 'approvalChanged', timestamp: new Date().toISOString() });
+        }
+        fileWatcher.broadcast({
+          type: 'reviewSummaryChanged',
+          timestamp: new Date().toISOString(),
+        });
+        res.json(summary);
+      },
+    );
+  }
+
   app.post('/api/comments', (req, res) => {
     try {
       const selection = getCommentSelectionFromQuery(req.query as Record<string, unknown>);
@@ -1065,12 +1179,29 @@ export async function startServer(
         res.status(415).json({ error: 'Approval requires application/json' });
         return;
       }
-      const input = req.body as { approved?: unknown } | null;
+      const input = req.body as { approved?: unknown; summaryVersion?: unknown } | null;
       if (!input || typeof input.approved !== 'boolean') {
         res.status(400).json({ error: 'Expected approved: true or false' });
         return;
       }
+      if (
+        input.summaryVersion !== undefined &&
+        (typeof input.summaryVersion !== 'number' ||
+          !Number.isSafeInteger(input.summaryVersion) ||
+          input.summaryVersion < 0)
+      ) {
+        res.status(400).json({ error: 'Expected a non-negative integer summaryVersion' });
+        return;
+      }
       const selection = getCommentSelectionFromQuery(req.query as Record<string, unknown>);
+      const summary = getReviewSummary(selection);
+      if (input.approved && (input.summaryVersion ?? 0) !== summary.version) {
+        res.status(409).json({
+          error: 'Review summary changed; read its latest version before approving',
+          summary,
+        });
+        return;
+      }
       const key = getDiffSelectionKey(selection);
       const previous = conversation?.getApproval(selection) ?? approvals.get(key);
       const approval = conversation

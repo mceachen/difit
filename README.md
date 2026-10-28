@@ -191,23 +191,25 @@ Stdin mode is selected with intent-first rules:
 
 ## ⚙️ CLI Options
 
-| Flag                  | Default         | Description                                                                                             |
-| --------------------- | --------------- | ------------------------------------------------------------------------------------------------------- |
-| `<target>`            | HEAD            | Commit hash, tag, HEAD~n, branch, or special arguments                                                  |
-| `[compare-with]`      | -               | Optional second commit to compare with (shows diff between the two)                                     |
-| `--merge-base`        | false           | Resolve the base revision with `git merge-base` before diffing (Git revision mode only)                 |
-| `--pr <url>`          | -               | GitHub PR URL to review (e.g., https://github.com/owner/repo/pull/123)                                  |
-| `--comment <json>`    | -               | Inject initial comments (repeatable; accepts a JSON object or array)                                    |
-| `--port`              | 4966            | Preferred port; falls back to +1 if occupied                                                            |
-| `--host`              | 127.0.0.1       | Host address to bind server to (use 0.0.0.0 for external access)                                        |
-| `--no-open`           | false           | Don't automatically open browser                                                                        |
-| `--clean`             | false           | Clear all existing comments and viewed files on startup                                                 |
-| `--lgtm, --ship-it`   | true            | Show the LGTM toggle to grant or revoke approval while the review stays open                            |
-| `--conversation`      | true            | Enable live comment events and exact-thread agent replies                                               |
-| `--include-untracked` | false           | Automatically include untracked files in diff (only with `.` or `working`)                              |
-| `--keep-alive`        | false           | Keep server running after browser disconnects (stop manually with Ctrl+C)                               |
-| `--background`        | false           | Keep the server running in the background and output JSON connection info                               |
-| `--context <lines>`   | git default (3) | Limit surrounding context lines per change (`0` shows changes only; not available with `--pr` or stdin) |
+| Flag                      | Default         | Description                                                                                             |
+| ------------------------- | --------------- | ------------------------------------------------------------------------------------------------------- |
+| `<target>`                | HEAD            | Commit hash, tag, HEAD~n, branch, or special arguments                                                  |
+| `[compare-with]`          | -               | Optional second commit to compare with (shows diff between the two)                                     |
+| `--merge-base`            | false           | Resolve the base revision with `git merge-base` before diffing (Git revision mode only)                 |
+| `--pr <url>`              | -               | GitHub PR URL to review (e.g., https://github.com/owner/repo/pull/123)                                  |
+| `--comment <json>`        | -               | Inject initial comments (repeatable; accepts a JSON object or array)                                    |
+| `--commit-message <text>` | -               | Seed the proposed commit message for the initial review                                                 |
+| `--why <text>`            | -               | Seed the rationale for the initial review                                                               |
+| `--port`                  | 4966            | Preferred port; falls back to +1 if occupied                                                            |
+| `--host`                  | 127.0.0.1       | Host address to bind server to (use 0.0.0.0 for external access)                                        |
+| `--no-open`               | false           | Don't automatically open browser                                                                        |
+| `--clean`                 | false           | Clear all existing comments and viewed files on startup                                                 |
+| `--lgtm, --ship-it`       | true            | Show the LGTM toggle to grant or revoke approval while the review stays open                            |
+| `--conversation`          | true            | Enable live comment events and exact-thread agent replies                                               |
+| `--include-untracked`     | false           | Automatically include untracked files in diff (only with `.` or `working`)                              |
+| `--keep-alive`            | false           | Keep server running after browser disconnects (stop manually with Ctrl+C)                               |
+| `--background`            | false           | Keep the server running in the background and output JSON connection info                               |
+| `--context <lines>`       | git default (3) | Limit surrounding context lines per change (`0` shows changes only; not available with `--pr` or stdin) |
 
 ## 💬 Comment System
 
@@ -294,6 +296,13 @@ difit automatically identifies and collapses certain files to keep your view cle
     - Language-specific generated headers (Go, Python, etc.)
 
 ## Agent conversations
+
+Seed editable review intent with
+`difit . --commit-message 'fix: preserve review intent' --why 'Explain why the change is needed.'`.
+Each diff selection keeps its own proposed message and rationale for the server's
+lifetime. Saving a change revokes that selection's LGTM approval. Agents can update
+the same fields with `difit comment summary --port <port> < /tmp/difit-summary.json`;
+see the [proposal protocol](docs/agent-conversations.md#proposed-commit-message-and-rationale).
 
 Use `difit <target> <base> --conversation --keep-alive` to let an agent
 answer submitted comments while you continue reviewing. In another process,
