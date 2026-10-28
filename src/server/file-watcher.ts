@@ -1,9 +1,11 @@
 import { join, resolve } from 'path';
 
 import { type Response } from 'express';
-import { simpleGit, type SimpleGit } from 'simple-git';
+import { type SimpleGit } from 'simple-git';
 
 import { DiffMode, type WatchEvent } from '../types/watch.js';
+
+import { createGitClient } from './git-client.js';
 
 interface FileWatcherConfig {
   watchPath: string;
@@ -76,7 +78,7 @@ export class FileWatcherService {
     const modeConfig = MODE_WATCH_CONFIGS[diffMode];
 
     // Initialize git instance for .gitignore checking
-    this.git = simpleGit(watchPath);
+    this.git = createGitClient(watchPath);
 
     try {
       await this.setupWatchers(modeConfig, watchPath);
@@ -156,7 +158,7 @@ export class FileWatcherService {
    */
   private async resolveGitDir(basePath: string): Promise<string> {
     try {
-      const git = simpleGit(basePath);
+      const git = createGitClient(basePath);
       const gitDir = await git.revparse(['--git-dir']);
       return resolve(basePath, gitDir.trim());
     } catch {

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { simpleGit, type SimpleGit } from 'simple-git';
+import { type SimpleGit } from 'simple-git';
 
 import pkg from '../../package.json' with { type: 'json' };
+import { createGitClient } from '../server/git-client.js';
 import { startServer } from '../server/server.js';
 import { type CommentImport, type DiffSelection } from '../types/diff.js';
 import { createDiffSelection } from '../utils/diffSelection.js';
@@ -285,7 +286,7 @@ program
       }
 
       if (selection.targetCommitish === 'working' || selection.targetCommitish === '.') {
-        const git = simpleGit(repoPath);
+        const git = createGitClient(repoPath);
         if (isBackgroundChild && !options.includeUntracked) {
           // Skip interactive prompts in detached background mode.
         } else {

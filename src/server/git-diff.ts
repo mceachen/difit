@@ -1,4 +1,4 @@
-import { simpleGit, type SimpleGit } from 'simple-git';
+import { type SimpleGit } from 'simple-git';
 import { basename, dirname, isAbsolute, resolve, sep } from 'path';
 
 import { validateDiffArguments, shortHash, createCommitRangeString } from '../cli/utils.js';
@@ -12,6 +12,7 @@ import {
 import { getMergeBaseTargetRef, normalizeBaseMode } from '../utils/diffSelection.js';
 
 import { isGeneratedFile } from './generated-file-check.js';
+import { createGitClient } from './git-client.js';
 
 export class GitDiffParser {
   private git: SimpleGit;
@@ -23,7 +24,7 @@ export class GitDiffParser {
 
   constructor(repoPath = process.cwd()) {
     this.repoPath = repoPath;
-    this.git = simpleGit(repoPath);
+    this.git = createGitClient(repoPath);
   }
 
   async getRepositoryName(): Promise<string> {
