@@ -20,3 +20,4 @@ minimumReleaseAge: 20160
 # Mermaid uses the stable renderToString API; keep its math renderer on a patched version.
 overrides:
   'mermaid>katex': 0.18.2
+  'oxfmt>tinypool': 2.1.2
