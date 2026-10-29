@@ -15,6 +15,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Detect VS Code packaging changes
@@ -24,9 +25,9 @@ jobs:
 
           if git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD \
             | grep -Eq '^(packages/vscode/|pnpm-lock.yaml$|pnpm-workspace.yaml$|package.json$|\.github/workflows/pr-vscode\.yml$)'; then
-            echo "run_package=true" >> $GITHUB_OUTPUT
+            echo "run_package=true" >> "$GITHUB_OUTPUT"
           else
-            echo "run_package=false" >> $GITHUB_OUTPUT
+            echo "run_package=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup Node.js

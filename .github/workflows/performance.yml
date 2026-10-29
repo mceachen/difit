@@ -20,6 +20,7 @@ jobs:
       - name: Checkout head branch
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           fetch-depth: 0
           path: head
 
@@ -52,6 +53,7 @@ jobs:
         if: steps.changes.outputs.run_benchmark == 'true'
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
 
@@ -190,8 +192,10 @@ jobs:
 
       - name: Check performance degradation
         if: steps.compare.outputs.status == 'degraded'
+        env:
+          CHANGE_PERCENT: ${{ steps.compare.outputs.change_percent }}
         run: |
-          echo "::warning::Performance has degraded by ${{ steps.compare.outputs.change_percent }}%"
+          printf '::warning::Performance has degraded by %s%%\n' "$CHANGE_PERCENT"
           exit 1
 
       - name: Skip benchmark
